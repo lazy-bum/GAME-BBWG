@@ -7,6 +7,10 @@ function toAccountRow(row: {
   account_id: string;
   name: string;
   kid: string;
+  group_id?: string | null;
+  group_name?: string | null;
+  group_priority?: number | null;
+  group_sort_order?: number | null;
   status: number;
   is_blacklisted: number;
   is_deleted: number;
@@ -26,6 +30,10 @@ function toAccountRow(row: {
     accountId: row.account_id,
     name: row.name,
     kid: row.kid,
+    groupId: row.group_id ?? '',
+    groupName: row.group_name ?? '',
+    groupPriority: row.group_priority ?? 0,
+    groupSortOrder: row.group_sort_order ?? 0,
     status: row.status as AccountStatus,
     blacklisted: row.is_blacklisted === 1,
     deleted: row.is_deleted === 1,
@@ -153,6 +161,25 @@ export async function createAccountsBatch(accounts: NewAccountInput[]): Promise<
   }
 }
 
+const ACCOUNT_SELECT = `
+  SELECT
+    a.*,
+    g.name as group_name,
+    g.priority as group_priority,
+    g.sort_order as group_sort_order
+  FROM accounts a
+  LEFT JOIN account_groups g ON g.group_id = a.group_id
+`;
+
+const ACCOUNT_REDEEM_ORDER = `
+  ORDER BY
+    CASE WHEN g.group_id IS NULL THEN 1 ELSE 0 END ASC,
+    COALESCE(g.priority, 0) DESC,
+    COALESCE(g.sort_order, 0) ASC,
+    a.sort_order ASC,
+    a.created_at ASC
+`;
+
 export async function listAccounts(): Promise<AccountRow[]> {
   const db = await getDb();
   const rows = await db.all<
@@ -160,6 +187,10 @@ export async function listAccounts(): Promise<AccountRow[]> {
       account_id: string;
       name: string;
       kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
       status: number;
       is_blacklisted: number;
       is_deleted: number;
@@ -168,7 +199,7 @@ export async function listAccounts(): Promise<AccountRow[]> {
       created_at: number;
       updated_at: number;
     }[]
-  >('SELECT * FROM accounts WHERE is_blacklisted = 0 AND is_deleted = 0 ORDER BY sort_order ASC, created_at ASC');
+  >(`${ACCOUNT_SELECT} WHERE a.is_blacklisted = 0 AND a.is_deleted = 0 ${ACCOUNT_REDEEM_ORDER}`);
   return rows.map(toAccountRow);
 }
 
@@ -179,6 +210,10 @@ export async function listBlacklistedAccounts(): Promise<AccountRow[]> {
       account_id: string;
       name: string;
       kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
       status: number;
       is_blacklisted: number;
       is_deleted: number;
@@ -187,7 +222,7 @@ export async function listBlacklistedAccounts(): Promise<AccountRow[]> {
       created_at: number;
       updated_at: number;
     }[]
-  >('SELECT * FROM accounts WHERE is_blacklisted = 1 AND is_deleted = 0 ORDER BY updated_at DESC, sort_order ASC, created_at ASC');
+  >(`${ACCOUNT_SELECT} WHERE a.is_blacklisted = 1 AND a.is_deleted = 0 ORDER BY a.updated_at DESC, a.sort_order ASC, a.created_at ASC`);
   return rows.map(toAccountRow);
 }
 
@@ -198,6 +233,10 @@ export async function listAccountsByStatus(status: AccountStatus): Promise<Accou
       account_id: string;
       name: string;
       kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
       status: number;
       is_blacklisted: number;
       is_deleted: number;
@@ -207,7 +246,7 @@ export async function listAccountsByStatus(status: AccountStatus): Promise<Accou
       updated_at: number;
     }[]
   >(
-    'SELECT * FROM accounts WHERE status = ? AND is_blacklisted = 0 AND is_deleted = 0 ORDER BY sort_order ASC, created_at ASC',
+    `${ACCOUNT_SELECT} WHERE a.status = ? AND a.is_blacklisted = 0 AND a.is_deleted = 0 ${ACCOUNT_REDEEM_ORDER}`,
     status
   );
   return rows.map(toAccountRow);
@@ -226,6 +265,10 @@ export async function listAccountsByIds(accountIds: string[], options?: { includ
       account_id: string;
       name: string;
       kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
       status: number;
       is_blacklisted: number;
       is_deleted: number;
@@ -235,9 +278,9 @@ export async function listAccountsByIds(accountIds: string[], options?: { includ
       updated_at: number;
     }[]
   >(
-    `SELECT * FROM accounts WHERE account_id IN (${placeholders})${
-      includeBlacklisted ? '' : ' AND is_blacklisted = 0'
-    } AND is_deleted = 0 ORDER BY sort_order ASC, created_at ASC`,
+    `${ACCOUNT_SELECT} WHERE a.account_id IN (${placeholders})${
+      includeBlacklisted ? '' : ' AND a.is_blacklisted = 0'
+    } AND a.is_deleted = 0 ${ACCOUNT_REDEEM_ORDER}`,
     accountIds
   );
 
@@ -260,6 +303,10 @@ export async function listAccountsByIdsIncludingDeleted(
       account_id: string;
       name: string;
       kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
       status: number;
       is_blacklisted: number;
       is_deleted: number;
@@ -269,9 +316,9 @@ export async function listAccountsByIdsIncludingDeleted(
       updated_at: number;
     }[]
   >(
-    `SELECT * FROM accounts WHERE account_id IN (${placeholders})${
-      includeBlacklisted ? '' : ' AND is_blacklisted = 0'
-    } ORDER BY sort_order ASC, created_at ASC`,
+    `${ACCOUNT_SELECT} WHERE a.account_id IN (${placeholders})${
+      includeBlacklisted ? '' : ' AND a.is_blacklisted = 0'
+    } ${ACCOUNT_REDEEM_ORDER}`,
     accountIds
   );
 
@@ -301,6 +348,29 @@ export async function reorderAccounts(accountIds: string[]): Promise<void> {
     await db.exec('ROLLBACK');
     throw error;
   }
+}
+
+export async function assignAccountsToGroup(accountIds: string[], groupId: string): Promise<number> {
+  const normalizedAccountIds = Array.from(new Set(accountIds.map((id) => id.trim()).filter(Boolean)));
+  const normalizedGroupId = groupId.trim();
+  if (normalizedAccountIds.length === 0) {
+    return 0;
+  }
+
+  const db = await getDb();
+  if (normalizedGroupId) {
+    const group = await db.get<{ group_id: string }>('SELECT group_id FROM account_groups WHERE group_id = ?', normalizedGroupId);
+    if (!group) {
+      throw new Error('分组不存在');
+    }
+  }
+
+  const placeholders = normalizedAccountIds.map(() => '?').join(',');
+  const result = await db.run(
+    `UPDATE accounts SET group_id = ?, updated_at = ? WHERE account_id IN (${placeholders}) AND is_deleted = 0`,
+    [normalizedGroupId, Date.now(), ...normalizedAccountIds]
+  );
+  return result.changes ?? 0;
 }
 
 export async function countAccountsByStatus(status: AccountStatus): Promise<number> {

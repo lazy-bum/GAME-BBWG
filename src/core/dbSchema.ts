@@ -7,10 +7,28 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       account_id TEXT PRIMARY KEY,
       name TEXT NOT NULL DEFAULT '',
       kid TEXT NOT NULL DEFAULT '',
+      group_id TEXT NOT NULL DEFAULT '',
       status INTEGER NOT NULL DEFAULT 0,
       is_blacklisted INTEGER NOT NULL DEFAULT 0,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       details TEXT NOT NULL DEFAULT '{}',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+  `);
+
+  const accountColumns = await db.all<{ name: string }[]>('PRAGMA table_info(accounts)');
+  if (!accountColumns.some((column) => column.name === 'group_id')) {
+    await db.exec("ALTER TABLE accounts ADD COLUMN group_id TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_group_id ON accounts(group_id)');
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS account_groups (
+      group_id TEXT PRIMARY KEY,
+      name TEXT NOT NULL DEFAULT '',
+      priority INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL

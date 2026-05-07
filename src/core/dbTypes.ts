@@ -10,6 +10,10 @@ export interface AccountRow {
   accountId: string;
   name: string;
   kid: string;
+  groupId: string;
+  groupName: string;
+  groupPriority: number;
+  groupSortOrder: number;
   status: AccountStatus;
   blacklisted: boolean;
   deleted: boolean;
@@ -23,6 +27,15 @@ export interface NewAccountInput {
   accountId: string;
   name: string;
   details: Record<string, unknown>;
+}
+
+export interface AccountGroupRow {
+  groupId: string;
+  name: string;
+  priority: number;
+  sortOrder: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface VisitorLogInput {
