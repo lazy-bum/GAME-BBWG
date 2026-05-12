@@ -59,6 +59,13 @@ let pollInFlight = false;
 let pollingPaused = false;
 let disabledByInvalidSession = false;
 
+export class WechatSessionExpiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WechatSessionExpiredError';
+  }
+}
+
 function formatLogTime(): string {
   return new Date().toLocaleString('zh-CN', { hour12: false });
 }
@@ -122,6 +129,14 @@ function isInvalidWechatSession(ret: number | undefined, message: string): boole
   return ret === 200003 || message.includes('invalid session');
 }
 
+function stopWechatRedeemCodePolling(): void {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  pollInFlight = false;
+}
+
 async function requestWechatArticleList(): Promise<WechatArticleListResponse> {
   const config = getWechatMpConfig();
   if (!config.token || !config.cookie) {
@@ -153,7 +168,8 @@ async function fetchWechatArticleList(): Promise<WechatArticleInput[]> {
     const message = payload.base_resp?.err_msg || '未知错误';
     if (isInvalidWechatSession(ret, message)) {
       disabledByInvalidSession = true;
-      throw new Error(`微信登录态已失效: ${message}`);
+      stopWechatRedeemCodePolling();
+      throw new WechatSessionExpiredError(`微信登录态已失效: ${message}`);
     }
     throw new Error(`微信文章列表响应异常: ret=${ret}, msg=${message}`);
   }
@@ -267,6 +283,10 @@ async function fetchNewArticleDetails(aids: string[]): Promise<RedeemCodeInput[]
 }
 
 export async function pollWechatRedeemCodes(): Promise<WechatRedeemCodePollResult> {
+  if (disabledByInvalidSession) {
+    throw new WechatSessionExpiredError('微信登录态已失效，请更新 WECHAT_MP_TOKEN/WECHAT_MP_COOKIE 或重启服务扫码登录。');
+  }
+
   const articles = await fetchWechatArticleList();
   const articleResult = await upsertWechatArticles(articles);
   const redeemCodes = await fetchNewArticleDetails(articleResult.insertedAids);
@@ -301,6 +321,12 @@ export function startWechatRedeemCodePolling(options?: { onNewCodes?: (codes: st
         await options?.onNewCodes?.(result.insertedCodes);
       }
     } catch (error) {
+      if (error instanceof WechatSessionExpiredError) {
+        // eslint-disable-next-line no-console
+        console.warn(`[${formatLogTime()}] ${error.message} 已停止微信公众号自动抓取兑换码。`);
+        return;
+      }
+
       // eslint-disable-next-line no-console
       console.error(`[${formatLogTime()}] 微信公众号自动抓取兑换码：失败`, error);
     } finally {
@@ -319,5 +345,11 @@ export function pauseWechatRedeemCodePolling(): void {
 }
 
 export function resumeWechatRedeemCodePolling(): void {
+  if (disabledByInvalidSession) {
+    // eslint-disable-next-line no-console
+    console.warn(`[${formatLogTime()}] 微信登录态已失效，微信公众号自动抓取兑换码保持停止。`);
+    return;
+  }
+
   pollingPaused = false;
 }
