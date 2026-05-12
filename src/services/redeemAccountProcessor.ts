@@ -11,6 +11,11 @@ import type { ApiEnvelope, RedeemProgressPayload } from './redeemTypes.js';
 const LOGIN_TO_REDEEM_DELAY_MS = 200;
 const TIMEOUT_RETRY_DELAY_MS = 2000;
 const MAX_TIMEOUT_RETRY_ATTEMPTS = 2;
+const RECEIVED_MESSAGES = new Set(['RECEIVED.', 'SAME TYPEEXCHANGE.']);
+
+function isReceivedMessage(message: string): boolean {
+  return RECEIVED_MESSAGES.has(message.trim().toUpperCase());
+}
 
 export interface RedeemAccountResult {
   successCount: number;
@@ -72,7 +77,7 @@ export class RedeemAccountProcessor {
       const code = redeemResult.code ?? null;
       const message = redeemResult.msg ?? '未知错误';
 
-      if (code === 0 || message.toUpperCase() === 'RECEIVED.') {
+      if (code === 0 || isReceivedMessage(message)) {
         await updateAccountStatus(account.accountId, ACCOUNT_STATUS.redeemed);
         if (code === 0) {
           this.options.log('success', `兑换成功: ${nickname || account.accountId} (${account.accountId})`);
