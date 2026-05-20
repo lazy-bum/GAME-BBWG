@@ -12,9 +12,14 @@ const LOGIN_TO_REDEEM_DELAY_MS = 200;
 const TIMEOUT_RETRY_DELAY_MS = 2000;
 const MAX_TIMEOUT_RETRY_ATTEMPTS = 2;
 const RECEIVED_MESSAGES = new Set(['RECEIVED.', 'SAME TYPEEXCHANGE.']);
+const LEVEL_LIMIT_MESSAGES = new Set(['STOVE_LV ERROR.', 'STOVE_LV ERROR']);
 
 function isReceivedMessage(message: string): boolean {
   return RECEIVED_MESSAGES.has(message.trim().toUpperCase());
+}
+
+function isLevelLimitMessage(message: string): boolean {
+  return LEVEL_LIMIT_MESSAGES.has(message.trim().toUpperCase());
 }
 
 export interface RedeemAccountResult {
@@ -77,10 +82,15 @@ export class RedeemAccountProcessor {
       const code = redeemResult.code ?? null;
       const message = redeemResult.msg ?? '未知错误';
 
-      if (code === 0 || isReceivedMessage(message)) {
+      if (code === 0 || isReceivedMessage(message) || isLevelLimitMessage(message)) {
         await updateAccountStatus(account.accountId, ACCOUNT_STATUS.redeemed);
         if (code === 0) {
           this.options.log('success', `兑换成功: ${nickname || account.accountId} (${account.accountId})`);
+          return { successCount: 1, receivedCount: 0, failureCount: 0 };
+        }
+
+        if (isLevelLimitMessage(message)) {
+          this.options.log('warn', `兑换成功-等级不足: ${nickname || account.accountId} (${account.accountId}) - ${message}`);
           return { successCount: 1, receivedCount: 0, failureCount: 0 };
         }
 

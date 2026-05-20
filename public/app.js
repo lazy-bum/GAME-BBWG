@@ -619,6 +619,7 @@ function syncRedeemStatusFromLog(message) {
     return;
   }
   const accountId = matched[1];
+  const normalizedMessage = message.toUpperCase();
 
   if (message.includes('开始处理')) {
     redeemStatuses[accountId] = { code: ACCOUNT_STATUS.pending, text: '处理中' };
@@ -628,6 +629,11 @@ function syncRedeemStatusFromLog(message) {
   if (message.includes('登录成功')) {
     redeemStatuses[accountId] = { code: ACCOUNT_STATUS.pending, text: '登录成功' };
     updateLocalAccountStatus(accountId, ACCOUNT_STATUS.pending);
+    return;
+  }
+  if (message.includes('兑换成功-等级不足') || normalizedMessage.includes('STOVE_LV ERROR')) {
+    redeemStatuses[accountId] = { code: ACCOUNT_STATUS.redeemed, text: '等级不足' };
+    updateLocalAccountStatus(accountId, ACCOUNT_STATUS.redeemed);
     return;
   }
   if (message.includes('兑换成功')) {
