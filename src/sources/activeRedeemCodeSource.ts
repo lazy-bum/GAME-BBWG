@@ -19,10 +19,17 @@ export interface RedeemCodeSourcePollResult {
   insertedCodes: string[];
 }
 
+export interface ActiveRedeemCodeSourceOptions {
+  forceWechatLogin?: boolean;
+}
+
 export class ActiveRedeemCodeSource {
   private wechatPollingAvailable = true;
 
-  constructor(private readonly useWechatSource: boolean) {}
+  constructor(
+    private readonly useWechatSource: boolean,
+    private readonly options: ActiveRedeemCodeSourceOptions = {}
+  ) {}
 
   async poll(): Promise<RedeemCodeSourcePollResult> {
     return this.useWechatSource ? pollWechatRedeemCodes() : pollTapTapRedeemCodes();
@@ -34,6 +41,14 @@ export class ActiveRedeemCodeSource {
     }
 
     try {
+      if (this.options.forceWechatLogin) {
+        // eslint-disable-next-line no-console
+        console.log('已启用强制微信扫码登录，跳过已有登录态校验。');
+        await loginWechatMpByQrCode();
+        enableWechatRedeemCodePolling();
+        return;
+      }
+
       // eslint-disable-next-line no-console
       console.log('正在校验微信公众平台登录态...');
       const sessionValid = await validateWechatMpSession();

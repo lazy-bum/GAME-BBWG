@@ -11,7 +11,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "start:wechat": "node dist/server.js --wechat"
+    "start:wechat": "node dist/server.js --wechat",
+    "start:wechat:login": "node dist/server.js --wechat --force-wechat-login",
+    "wechat:login": "tsx src/scripts/forceWechatLogin.ts"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

@@ -139,6 +139,19 @@ npm run build
 npm run start:wechat
 ```
 
+如果需要忽略已有登录态并强制重新扫码登录，可以使用：
+
+```bash
+npm run build
+npm run start:wechat:login
+```
+
+如果只想刷新微信登录态，扫码成功后保存到 `config.json` 并退出，可以使用：
+
+```bash
+npm run wechat:login
+```
+
 开发模式可以使用：
 
 ```bash
@@ -148,8 +161,11 @@ npm run dev -- --wechat
 说明：
 
 - `npm run start:wechat` 等价于 `node dist/server.js --wechat`。
+- `npm run start:wechat:login` 等价于 `node dist/server.js --wechat --force-wechat-login`。
+- `npm run wechat:login` 只执行微信扫码登录并更新 `config.json`，不会启动 Web 服务。
 - 微信模式启动后会先校验 `config.json` 中已有的公众号后台登录态。
 - 已有登录态有效时会跳过扫码，直接启动微信文章轮询。
+- 使用 `--force-wechat-login` 时会跳过登录态校验，直接进入扫码登录流程。
 - 没有历史登录态或登录态失效时，才会进入扫码登录流程。
 - 扫码成功后会保存新的 `token/cookie/userAgent`，供下次启动校验复用。
 - 如果扫码失败、超时或登录态不可用，Web 服务仍会启动，只是不启用微信轮询。

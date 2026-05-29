@@ -18,7 +18,9 @@ const app = express();
 const redeemService = new RedeemService();
 const accountImportService = new AccountImportService();
 const sseHub = new SseHub();
-const redeemCodeSource = new ActiveRedeemCodeSource(process.argv.includes('--wechat'));
+const redeemCodeSource = new ActiveRedeemCodeSource(process.argv.includes('--wechat'), {
+  forceWechatLogin: process.argv.includes('--force-wechat-login')
+});
 
 const adminUsername = process.env.ADMIN_USERNAME?.trim() || '';
 const adminPassword = process.env.ADMIN_PASSWORD?.trim() || '';

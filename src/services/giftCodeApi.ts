@@ -18,7 +18,7 @@ function normalizeSignValue(value: unknown): string {
   if (Array.isArray(value) || (typeof value === 'object' && value !== null)) {
     return JSON.stringify(value);
   }
-  return String(value);
+  return encodeURIComponent(String(value));
 }
 
 function buildSignedParams(params: Record<string, string>): Record<string, string> {
