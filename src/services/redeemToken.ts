@@ -91,18 +91,37 @@ function decodeSaltFromModuleSource(
   }
 
   const md5CallMatch = moduleSource.match(/MD5\([\s\S]*?\+\s*([_$a-zA-Z0-9]+)\((0x[0-9a-f]+)\)[\s\S]*?\)/i);
-  if (!md5CallMatch?.[2]) {
+  if (md5CallMatch?.[2]) {
+    const indexValue = Number.parseInt(md5CallMatch[2], 16);
+    if (Number.isFinite(indexValue)) {
+      for (const decoder of decoderCandidates) {
+        try {
+          const decodedValue = decoder(indexValue);
+          if (typeof decodedValue === 'string' && /^[A-Za-z0-9]{16,}$/.test(decodedValue)) {
+            return decodedValue;
+          }
+        } catch {
+          // ignore decoder failures
+        }
+      }
+    }
+  }
+
+  const obfuscatedSignSaltMatch = moduleSource.match(
+    /['"]sign['"]\s*:\s*[\s\S]*?\+\s*([_$a-zA-Z0-9]+)\((0x[0-9a-f]+|\d+)\)[\s\S]*?\}/i
+  );
+  if (!obfuscatedSignSaltMatch?.[2]) {
     return null;
   }
 
-  const indexValue = Number.parseInt(md5CallMatch[2], 16);
-  if (!Number.isFinite(indexValue)) {
+  const obfuscatedIndexValue = Number.parseInt(obfuscatedSignSaltMatch[2], 0);
+  if (!Number.isFinite(obfuscatedIndexValue)) {
     return null;
   }
 
   for (const decoder of decoderCandidates) {
     try {
-      const decodedValue = decoder(indexValue);
+      const decodedValue = decoder(obfuscatedIndexValue);
       if (typeof decodedValue === 'string' && /^[A-Za-z0-9]{16,}$/.test(decodedValue)) {
         return decodedValue;
       }
@@ -156,7 +175,7 @@ function extractRedeemSaltFromBundle(bundleContent: string): string | null {
         }
 
         const moduleSource = moduleFactory.toString();
-        if (!moduleSource.includes('appendSign') && !moduleSource.includes('MD5')) {
+        if (!moduleSource.includes('appendSign') && !moduleSource.includes('MD5') && !moduleSource.includes("'sign'")) {
           continue;
         }
 
