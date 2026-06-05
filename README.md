@@ -75,7 +75,7 @@ https://mp.weixin.qq.com/s/xxxxxx
 
 然后从文章正文中解析兑换码。
 
-微信模式会优先复用上一次登录保存的 `token/cookie/userAgent`。启动时会先校验 `config.json` 中的微信登录态；校验通过就直接启动微信轮询，不再扫码。校验失败或没有历史登录态时，终端才会输出二维码；扫码并在手机上确认后，会把新的登录态保存到 `config.json`。如果终端二维码无法识别，也会保存本地二维码图片到 `data/wechat-login-qrcode.jpg`。
+微信模式会优先复用上一次登录保存的 `token/cookie/userAgent`。启动时会先校验 `config.json` 中的微信登录态；校验通过就直接启动微信轮询，不再扫码。校验失败或没有历史登录态时，终端才会输出二维码；扫码并在手机上确认后，会把新的登录态保存到 `config.json`。终端二维码会使用兼容宝塔项目运行日志的纯文本渲染；如果日志二维码仍无法识别，也会保存本地二维码图片到 `data/wechat-login-qrcode.jpg`。
 
 ## 抓取规则
 

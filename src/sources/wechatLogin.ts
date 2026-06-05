@@ -3,10 +3,13 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
-import qrcode from 'qrcode-terminal';
 import { getWechatMpConfig, setWechatMpSession } from '../core/config.js';
 
 const require = createRequire(import.meta.url);
+const QRCode = require('qrcode-terminal/vendor/QRCode') as QRCodeConstructor;
+const QRErrorCorrectLevel = require('qrcode-terminal/vendor/QRCode/QRErrorCorrectLevel') as {
+  L: number;
+};
 const jsQR = require('jsqr') as (
   data: Uint8ClampedArray,
   width: number,
@@ -34,6 +37,17 @@ interface DecodedImage {
   width: number;
   height: number;
   data: Uint8Array | Buffer;
+}
+
+interface TerminalQrCode {
+  addData(data: string): void;
+  make(): void;
+  getModuleCount(): number;
+  isDark(row: number, col: number): boolean;
+}
+
+interface QRCodeConstructor {
+  new (typeNumber: number, errorCorrectLevel: number): TerminalQrCode;
 }
 
 class CookieJar {
@@ -156,7 +170,25 @@ function getQrContentFromImage(buffer: Buffer): string {
 }
 
 function renderQrCodeToTerminal(content: string): void {
-  qrcode.generate(content, { small: true });
+  const qrcode = new QRCode(-1, QRErrorCorrectLevel.L);
+  qrcode.addData(content);
+  qrcode.make();
+
+  const moduleCount = qrcode.getModuleCount();
+  const quietZone = 4;
+  const lines: string[] = [];
+
+  for (let row = -quietZone; row < moduleCount + quietZone; row++) {
+    let line = '';
+    for (let col = -quietZone; col < moduleCount + quietZone; col++) {
+      const isInQrCode = row >= 0 && row < moduleCount && col >= 0 && col < moduleCount;
+      line += isInQrCode && qrcode.isDark(row, col) ? '█' : '░';
+    }
+    lines.push(line);
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(lines.join('\n'));
 }
 
 function isPngBuffer(buffer: Buffer): boolean {

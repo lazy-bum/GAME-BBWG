@@ -42,6 +42,12 @@ app.set('trust proxy', true);
 app.use(express.json());
 app.use(createVisitorAuditMiddleware(authService));
 app.use(createVisitorBlacklistMiddleware());
+app.use(
+  '/.well-known',
+  express.static(path.resolve(__dirname, '../.well-known'), {
+    dotfiles: 'allow'
+  })
+);
 app.use(express.static(path.resolve(__dirname, '../public')));
 
 redeemService.on('progress', (payload) => {
