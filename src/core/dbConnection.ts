@@ -17,10 +17,11 @@ export async function getDb(): Promise<Database<sqlite3.Database, sqlite3.Statem
     dbPromise = open({
       filename: getDbPath(),
       driver: sqlite3.Database
+    }).then(async (db) => {
+      await initSchema(db);
+      return db;
     });
   }
 
-  const db = await dbPromise;
-  await initSchema(db);
-  return db;
+  return dbPromise;
 }

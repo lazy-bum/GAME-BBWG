@@ -1,6 +1,9 @@
+let visitorFilterRenderTimer = null;
+
 export function bindVisitorEvents({
   api,
   render,
+  renderLocal,
   getVisitorBlockTargetIp,
   setVisitorBlockTargetIp,
   setVisitorPathFilter,
@@ -33,13 +36,19 @@ export function bindVisitorEvents({
   visitorPathFilterInput?.addEventListener('input', () => {
     setVisitorPathFilter(visitorPathFilterInput.value ?? '');
     resetVisitorVisibleCount();
-    void render();
+    if (visitorFilterRenderTimer) {
+      clearTimeout(visitorFilterRenderTimer);
+    }
+    visitorFilterRenderTimer = setTimeout(() => {
+      visitorFilterRenderTimer = null;
+      void renderLocal();
+    }, 150);
   });
 
   document.querySelector('#clear-visitor-path-filter')?.addEventListener('click', () => {
     setVisitorPathFilter('');
     resetVisitorVisibleCount();
-    void render();
+    void renderLocal();
   });
 
   const addBlacklistEntryButton = document.querySelector('#add-blacklist-entry');
@@ -78,13 +87,13 @@ export function bindVisitorEvents({
   visitorBlockModal?.addEventListener('click', (event) => {
     if (event.target === visitorBlockModal) {
       setVisitorBlockTargetIp('');
-      void render();
+      void renderLocal();
     }
   });
 
   document.querySelector('#cancel-visitor-block')?.addEventListener('click', () => {
     setVisitorBlockTargetIp('');
-    void render();
+    void renderLocal();
   });
 
   const confirmVisitorBlockButton = document.querySelector('#confirm-visitor-block');
@@ -115,7 +124,7 @@ export function bindVisitorEvents({
       const ipAddress = button.dataset.blockIp;
       if (ipAddress) {
         setVisitorBlockTargetIp(ipAddress);
-        void render();
+        void renderLocal();
       }
     });
   });

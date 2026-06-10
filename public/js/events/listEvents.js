@@ -1,6 +1,7 @@
 export function bindListEvents({
   api,
   render,
+  renderLocal,
   isAdmin,
   getCurrentRoute,
   getFilters,
@@ -31,7 +32,7 @@ export function bindListEvents({
 
   document.querySelector('#view-account-blacklist')?.addEventListener('click', () => {
     setAccountBlacklistModalOpen(true);
-    void render();
+    document.querySelector('#account-blacklist-modal')?.removeAttribute('hidden');
   });
 
   const accountBlacklistModal = document.querySelector('#account-blacklist-modal');
@@ -40,12 +41,12 @@ export function bindListEvents({
       return;
     }
     setAccountBlacklistModalOpen(false);
-    void render();
+    accountBlacklistModal.setAttribute('hidden', '');
   });
 
   document.querySelector('#close-account-blacklist')?.addEventListener('click', () => {
     setAccountBlacklistModalOpen(false);
-    void render();
+    document.querySelector('#account-blacklist-modal')?.setAttribute('hidden', '');
   });
 
   document.querySelector('#apply-search')?.addEventListener('click', () => {
@@ -55,7 +56,7 @@ export function bindListEvents({
       accountIdFilter: accountIdInput?.value ?? '',
       gameNameFilter: gameNameInput?.value ?? ''
     });
-    void render();
+    void renderLocal();
   });
 
   document.querySelector('#clear-search')?.addEventListener('click', () => {
@@ -63,7 +64,7 @@ export function bindListEvents({
       accountIdFilter: '',
       gameNameFilter: ''
     });
-    void render();
+    void renderLocal();
   });
 
   document.querySelectorAll('[data-account-group-tab]').forEach((button) => {
@@ -74,16 +75,18 @@ export function bindListEvents({
       }
       setAccountGroupFilter(nextFilter);
       setSelectedAccountIds(new Set());
-      void render();
+      void renderLocal();
     });
   });
 
   const selectVisibleAccounts = document.querySelector('#select-visible-accounts');
   selectVisibleAccounts?.addEventListener('change', () => {
     const selectedAccountIds = new Set(getSelectedAccountIds());
-    const visibleAccountIds = Array.from(document.querySelectorAll('[data-select-account]')).map(
-      (item) => item.dataset.selectAccount ?? ''
-    );
+    const visibleCheckboxes = Array.from(document.querySelectorAll('[data-select-account]'));
+    const visibleAccountIds = visibleCheckboxes.map((item) => item.dataset.selectAccount ?? '');
+    for (const checkbox of visibleCheckboxes) {
+      checkbox.checked = selectVisibleAccounts.checked;
+    }
     if (selectVisibleAccounts.checked) {
       for (const accountId of visibleAccountIds) {
         if (accountId) {
@@ -96,7 +99,7 @@ export function bindListEvents({
       }
     }
     setSelectedAccountIds(selectedAccountIds);
-    void render();
+    refreshSelectionUi(selectedAccountIds);
   });
 
   document.querySelectorAll('[data-select-account]').forEach((checkbox) => {
@@ -112,7 +115,7 @@ export function bindListEvents({
         selectedAccountIds.delete(accountId);
       }
       setSelectedAccountIds(selectedAccountIds);
-      void render();
+      refreshSelectionUi(selectedAccountIds);
     });
   });
 
@@ -203,6 +206,22 @@ export function bindListEvents({
       }
     });
   });
+}
+
+function refreshSelectionUi(selectedAccountIds) {
+  const visibleCheckboxes = Array.from(document.querySelectorAll('[data-select-account]'));
+  const selectedVisibleCount = visibleCheckboxes.filter((checkbox) => checkbox.checked).length;
+  const selectVisibleAccounts = document.querySelector('#select-visible-accounts');
+  if (selectVisibleAccounts) {
+    selectVisibleAccounts.checked = visibleCheckboxes.length > 0 && selectedVisibleCount === visibleCheckboxes.length;
+    selectVisibleAccounts.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleCheckboxes.length;
+  }
+
+  const applyAccountGroupButton = document.querySelector('#apply-account-group');
+  if (applyAccountGroupButton) {
+    applyAccountGroupButton.disabled = selectedAccountIds.size === 0;
+    applyAccountGroupButton.textContent = `批量分组 (${selectedAccountIds.size})`;
+  }
 }
 
 function bindNamePopupEvents({ isNamePopupDismissBound, markNamePopupDismissBound }) {

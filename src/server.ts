@@ -48,7 +48,16 @@ app.use(
     dotfiles: 'allow'
   })
 );
-app.use(express.static(path.resolve(__dirname, '../public')));
+app.use(
+  express.static(path.resolve(__dirname, '../public'), {
+    maxAge: '5m',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    }
+  })
+);
 
 redeemService.on('progress', (payload) => {
   sseHub.broadcastRedeemProgress(payload);

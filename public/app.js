@@ -62,11 +62,16 @@ let visitorLogLimit = 100;
 let visitorBlockTargetIp = '';
 let visitorPathFilter = '';
 let visitorVisibleCount = 10;
+let listDataLoaded = false;
+let redeemAccountsLoaded = false;
+let groupsDataLoaded = false;
+let visitorsDataLoaded = false;
 
 let eventSource = null;
 let importEventSource = null;
 let namePopupDismissBound = false;
 let visitorLogObserver = null;
+let renderSequence = 0;
 
 function persistRedeemCode(value) {
   redeemCode = value.trim();
@@ -182,8 +187,8 @@ function ensureImportEventSource() {
   });
 }
 
-function api(path, options) {
-  return requestJson(path, options, () => {
+async function api(path, options) {
+  const result = await requestJson(path, options, () => {
     isAuthenticated = false;
     authChecked = true;
     authUsername = '';
@@ -192,6 +197,22 @@ function api(path, options) {
     closeImportEventSource();
     void render();
   });
+  const method = options?.method?.toUpperCase() ?? 'GET';
+  if (method !== 'GET') {
+    if (path.startsWith('/api/accounts')) {
+      listDataLoaded = false;
+      redeemAccountsLoaded = false;
+    }
+    if (path.startsWith('/api/account-groups') || path === '/api/accounts/group') {
+      listDataLoaded = false;
+      groupsDataLoaded = false;
+      redeemAccountsLoaded = false;
+    }
+    if (path.startsWith('/api/visitor-')) {
+      visitorsDataLoaded = false;
+    }
+  }
+  return result;
 }
 
 function closeEventSource() {
@@ -230,24 +251,33 @@ function navigate(route) {
     selectedAccountIds = new Set();
     accountGroupFilter = 'ungrouped';
   }
-  window.location.hash = route === 'home' ? '' : route;
-  void render();
+  const nextHash = route === 'home' ? '' : `#${route}`;
+  if (window.location.hash === nextHash) {
+    void render();
+    return;
+  }
+  window.location.hash = nextHash;
 }
 
 function shell(content, pageClass = '') {
   return createShell(content, { currentRoute, authUsername, pageClass });
 }
 
-async function renderListPage() {
-  const [accounts, adminBlacklistedAccounts, adminGroups] = await Promise.all([
-    api('/api/accounts'),
-    isAdminUser() ? api('/api/accounts/blacklist') : Promise.resolve([]),
-    isAdminUser() ? api('/api/account-groups') : Promise.resolve([])
-  ]);
-  listAccountsCache = accounts;
-  blacklistedAccounts = adminBlacklistedAccounts;
-  accountGroups = adminGroups;
-  selectedAccountIds = new Set([...selectedAccountIds].filter((accountId) => accounts.some((account) => account.accountId === accountId)));
+async function renderListPage(refreshData = true) {
+  if (refreshData) {
+    const [accounts, adminBlacklistedAccounts, adminGroups] = await Promise.all([
+      api('/api/accounts'),
+      isAdminUser() ? api('/api/accounts/blacklist') : Promise.resolve([]),
+      isAdminUser() ? api('/api/account-groups') : Promise.resolve([])
+    ]);
+    listAccountsCache = accounts;
+    blacklistedAccounts = adminBlacklistedAccounts;
+    accountGroups = adminGroups;
+    listDataLoaded = true;
+  }
+  selectedAccountIds = new Set(
+    [...selectedAccountIds].filter((accountId) => listAccountsCache.some((account) => account.accountId === accountId))
+  );
   if (
     isAdminUser() &&
     accountGroupFilter !== 'all' &&
@@ -256,7 +286,7 @@ async function renderListPage() {
   ) {
     accountGroupFilter = 'ungrouped';
   }
-  const filteredAccounts = accounts.filter((account) => {
+  const filteredAccounts = listAccountsCache.filter((account) => {
     const groupMatches =
       !isAdminUser() ||
       accountGroupFilter === 'all' ||
@@ -271,7 +301,7 @@ async function renderListPage() {
     filteredAccounts.length > 0 && filteredAccounts.every((account) => selectedAccountIds.has(account.accountId));
   return renderListView(shell, {
     isAdmin: isAdminUser(),
-    accounts,
+    accounts: listAccountsCache,
     filteredAccounts,
     accountGroups,
     accountGroupFilter,
@@ -328,10 +358,12 @@ function setupVisitorLogObserver() {
   visitorLogObserver.observe(loadMoreElement);
 }
 
-async function render() {
+async function render({ refreshData = true } = {}) {
   if (!app) {
     return;
   }
+  const sequence = ++renderSequence;
+  const route = currentRoute;
 
   if (!authChecked) {
     app.innerHTML = '';
@@ -346,6 +378,9 @@ async function render() {
 
   if (!redeemConfigLoaded) {
     const config = await api('/api/config/redeem');
+    if (sequence !== renderSequence) {
+      return;
+    }
     redeemToken = config.redeemToken;
     redeemConfigLoaded = true;
   }
@@ -355,11 +390,12 @@ async function render() {
     window.location.hash = '';
   }
 
-  if (currentRoute === 'redeem') {
+  if (currentRoute === 'redeem' && refreshData) {
     redeemAccounts = await api('/api/accounts');
+    redeemAccountsLoaded = true;
   }
 
-  if (currentRoute === 'visitors' && isAdminUser()) {
+  if (currentRoute === 'visitors' && isAdminUser() && refreshData) {
     const [logResult, blacklistResult] = await Promise.all([
       api(`/api/visitor-logs?limit=${visitorLogLimit}`),
       api('/api/visitor-blacklist')
@@ -368,10 +404,16 @@ async function render() {
     visitorLogRetentionDays = logResult.retentionDays || 30;
     visitorBlacklist = blacklistResult || [];
     visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
+    visitorsDataLoaded = true;
   }
 
-  if (currentRoute === 'groups' && isAdminUser()) {
+  if (currentRoute === 'groups' && isAdminUser() && refreshData) {
     accountGroups = await api('/api/account-groups');
+    groupsDataLoaded = true;
+  }
+
+  if (sequence !== renderSequence || route !== currentRoute) {
+    return;
   }
 
   if (currentRoute === 'home') {
@@ -387,7 +429,11 @@ async function render() {
       importCurrentAccountId
     });
   } else if (currentRoute === 'list') {
-    app.innerHTML = await renderListPage();
+    const listHtml = await renderListPage(refreshData);
+    if (sequence !== renderSequence || route !== currentRoute) {
+      return;
+    }
+    app.innerHTML = listHtml;
   } else if (currentRoute === 'groups' && isAdminUser()) {
     app.innerHTML = renderGroupsView(shell, { accountGroups });
   } else if (currentRoute === 'visitors' && isAdminUser()) {
@@ -468,6 +514,10 @@ function bindEvents() {
       visitorBlacklist = [];
       visitorPathFilter = '';
       visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
+      listDataLoaded = false;
+      redeemAccountsLoaded = false;
+      groupsDataLoaded = false;
+      visitorsDataLoaded = false;
       disconnectVisitorLogObserver();
       closeEventSource();
       closeImportEventSource();
@@ -492,6 +542,7 @@ function bindEvents() {
   bindVisitorEvents({
     api,
     render,
+    renderLocal: () => render({ refreshData: false }),
     getVisitorBlockTargetIp: () => visitorBlockTargetIp,
     setVisitorBlockTargetIp: (value) => {
       visitorBlockTargetIp = value;
@@ -510,6 +561,7 @@ function bindEvents() {
   bindListEvents({
     api,
     render,
+    renderLocal: () => render({ refreshData: false }),
     isAdmin: isAdminUser,
     getCurrentRoute: () => currentRoute,
     getFilters: () => ({ accountIdFilter, gameNameFilter }),
@@ -687,7 +739,14 @@ function updateLocalAccountStatus(accountId, status) {
 
 window.addEventListener('hashchange', () => {
   currentRoute = getRouteFromHash();
-  void render();
+  const hasCachedData =
+    (currentRoute === 'list' && listDataLoaded) ||
+    (currentRoute === 'redeem' && redeemAccountsLoaded) ||
+    (currentRoute === 'groups' && groupsDataLoaded) ||
+    (currentRoute === 'visitors' && visitorsDataLoaded) ||
+    currentRoute === 'home' ||
+    currentRoute === 'create';
+  void render({ refreshData: !hasCachedData });
 });
 
 currentRoute = getRouteFromHash();

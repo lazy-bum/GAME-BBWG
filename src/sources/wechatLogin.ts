@@ -177,12 +177,15 @@ function renderQrCodeToTerminal(content: string): void {
   const moduleCount = qrcode.getModuleCount();
   const quietZone = 4;
   const lines: string[] = [];
+  const isDark = (row: number, col: number): boolean =>
+    row >= 0 && row < moduleCount && col >= 0 && col < moduleCount && qrcode.isDark(row, col);
 
-  for (let row = -quietZone; row < moduleCount + quietZone; row++) {
+  for (let row = -quietZone; row < moduleCount + quietZone; row += 2) {
     let line = '';
     for (let col = -quietZone; col < moduleCount + quietZone; col++) {
-      const isInQrCode = row >= 0 && row < moduleCount && col >= 0 && col < moduleCount;
-      line += isInQrCode && qrcode.isDark(row, col) ? '█' : '░';
+      const topDark = isDark(row, col);
+      const bottomDark = isDark(row + 1, col);
+      line += topDark ? (bottomDark ? '█' : '▀') : bottomDark ? '▄' : '░';
     }
     lines.push(line);
   }
