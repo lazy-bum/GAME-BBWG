@@ -4,7 +4,11 @@ import {
 } from '../core/dbTypes.js';
 import { getWechatMpConfig } from '../core/config.js';
 import { upsertRedeemCodes } from '../core/redeemCodeRepository.js';
-import { listWechatArticlesByAids, updateWechatArticleDetail, upsertWechatArticles } from '../core/wechatArticleRepository.js';
+import {
+  listWechatArticlesNeedingDetailsByAids,
+  updateWechatArticleDetail,
+  upsertWechatArticles
+} from '../core/wechatArticleRepository.js';
 import { extractRedeemCodes, normalizeWhitespace } from './redeemCodeParser.js';
 
 const WECHAT_APPMSG_PUBLISH_URL = 'https://mp.weixin.qq.com/cgi-bin/appmsgpublish';
@@ -88,10 +92,11 @@ function stripHtmlToText(html: string): string {
 
 function extractArticleText(html: string): string {
   const contentMatch = html.match(/<div[^>]+id=["']js_content["'][^>]*>([\s\S]*?)<\/div>\s*<script/i);
-  if (contentMatch?.[1]) {
-    return stripHtmlToText(contentMatch[1]);
+  if (!contentMatch?.[1]) {
+    const unavailableMessage = html.match(/<title>\s*([^<]*无法查看[^<]*)<\/title>/i)?.[1];
+    throw new Error(unavailableMessage?.trim() || '微信文章详情响应中未找到正文');
   }
-  return stripHtmlToText(html);
+  return stripHtmlToText(contentMatch[1]);
 }
 
 function parseJsonString<T>(value: string | undefined, fallback: T): T {
@@ -225,7 +230,9 @@ export function enableWechatRedeemCodePolling(): void {
 }
 
 async function fetchWechatArticleHtml(url: string): Promise<string> {
-  const response = await fetch(url, {
+  const articleUrl = new URL(url);
+  articleUrl.searchParams.set('nwr_flag', '1');
+  const response = await fetch(articleUrl, {
     redirect: 'follow',
     headers: {
       'User-Agent': WECHAT_ARTICLE_USER_AGENT,
@@ -240,8 +247,8 @@ async function fetchWechatArticleHtml(url: string): Promise<string> {
   return response.text();
 }
 
-async function fetchNewArticleDetails(aids: string[]): Promise<RedeemCodeInput[]> {
-  const articles = await listWechatArticlesByAids(aids);
+async function fetchArticleDetails(aids: string[]): Promise<RedeemCodeInput[]> {
+  const articles = await listWechatArticlesNeedingDetailsByAids(aids);
   const redeemCodes: RedeemCodeInput[] = [];
 
   for (const article of articles) {
@@ -289,7 +296,7 @@ export async function pollWechatRedeemCodes(): Promise<WechatRedeemCodePollResul
 
   const articles = await fetchWechatArticleList();
   const articleResult = await upsertWechatArticles(articles);
-  const redeemCodes = await fetchNewArticleDetails(articleResult.insertedAids);
+  const redeemCodes = await fetchArticleDetails(articles.map((article) => article.aid));
   const codeResult = await upsertRedeemCodes(redeemCodes);
 
   return {

@@ -35,7 +35,12 @@ export {
   reserveRedeemCodeRedemption,
   upsertRedeemCodes
 } from './redeemCodeRepository.js';
-export { listWechatArticlesByAids, updateWechatArticleDetail, upsertWechatArticles } from './wechatArticleRepository.js';
+export {
+  listWechatArticlesByAids,
+  listWechatArticlesNeedingDetailsByAids,
+  updateWechatArticleDetail,
+  upsertWechatArticles
+} from './wechatArticleRepository.js';
 export type {
   AccountRow,
   AccountStatus,

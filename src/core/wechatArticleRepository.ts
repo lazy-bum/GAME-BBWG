@@ -138,3 +138,47 @@ export async function listWechatArticlesByAids(aids: string[]): Promise<WechatAr
     updatedAt: row.source_updated_at
   }));
 }
+
+export async function listWechatArticlesNeedingDetailsByAids(aids: string[]): Promise<WechatArticleInput[]> {
+  const normalized = Array.from(new Set(aids.map((aid) => aid.trim()).filter(Boolean)));
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const db = await getDb();
+  const placeholders = normalized.map(() => '?').join(',');
+  const rows = await db.all<
+    {
+      aid: string;
+      title: string;
+      link: string;
+      author: string;
+      fakeid: string;
+      digest: string;
+      cover: string;
+      html: string;
+      fetch_status: string;
+      published_at: number;
+      source_updated_at: number;
+    }[]
+  >(`SELECT * FROM wechat_articles WHERE aid IN (${placeholders})`, normalized);
+
+  return rows
+    .filter(
+      (row) =>
+        row.fetch_status !== 'ok' ||
+        !row.html ||
+        !/\bid=["']js_content["']/i.test(row.html)
+    )
+    .map((row) => ({
+      aid: row.aid,
+      title: row.title,
+      link: row.link,
+      author: row.author,
+      fakeid: row.fakeid,
+      digest: row.digest,
+      cover: row.cover,
+      publishedAt: row.published_at,
+      updatedAt: row.source_updated_at
+    }));
+}
