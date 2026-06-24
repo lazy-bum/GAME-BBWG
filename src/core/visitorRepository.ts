@@ -1,6 +1,14 @@
 import { getDb } from './dbConnection.js';
 import type { BlacklistEntry, VisitorLogInput, VisitorLogRow } from './dbTypes.js';
 
+let blacklistCache: Map<string, BlacklistEntry> | null = null;
+let blacklistCachePromise: Promise<Map<string, BlacklistEntry>> | null = null;
+const VISITOR_LOG_BATCH_SIZE = 50;
+const VISITOR_LOG_FLUSH_DELAY_MS = 1000;
+let visitorLogQueue: VisitorLogInput[] = [];
+let visitorLogFlushTimer: NodeJS.Timeout | null = null;
+let visitorLogFlushPromise: Promise<void> | null = null;
+
 export async function createVisitorLog(input: VisitorLogInput): Promise<void> {
   const db = await getDb();
   await db.run(
@@ -49,7 +57,125 @@ export async function createVisitorLog(input: VisitorLogInput): Promise<void> {
   );
 }
 
+async function createVisitorLogsBatch(inputs: VisitorLogInput[]): Promise<void> {
+  if (inputs.length === 0) {
+    return;
+  }
+
+  const db = await getDb();
+  await db.exec('BEGIN');
+  try {
+    for (const input of inputs) {
+      await db.run(
+        `INSERT INTO visitor_logs (
+          ip_address,
+          method,
+          protocol,
+          host,
+          path,
+          query,
+          params,
+          headers,
+          body,
+          status_code,
+          duration_ms,
+          username,
+          user_role,
+          user_agent,
+          referer,
+          cf_ray,
+          cf_country,
+          blocked,
+          block_reason,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        input.ipAddress,
+        input.method,
+        input.protocol,
+        input.host,
+        input.path,
+        input.query,
+        input.params,
+        input.headers,
+        input.body,
+        input.statusCode,
+        input.durationMs,
+        input.username,
+        input.userRole,
+        input.userAgent,
+        input.referer,
+        input.cfRay,
+        input.cfCountry,
+        input.blocked ? 1 : 0,
+        input.blockReason,
+        input.createdAt
+      );
+    }
+    await db.exec('COMMIT');
+  } catch (error) {
+    await db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function scheduleVisitorLogFlush(): void {
+  if (visitorLogFlushTimer) {
+    return;
+  }
+
+  visitorLogFlushTimer = setTimeout(() => {
+    visitorLogFlushTimer = null;
+    void flushQueuedVisitorLogs();
+  }, VISITOR_LOG_FLUSH_DELAY_MS);
+}
+
+export function enqueueVisitorLog(input: VisitorLogInput): void {
+  visitorLogQueue.push(input);
+  if (visitorLogQueue.length >= VISITOR_LOG_BATCH_SIZE) {
+    if (visitorLogFlushTimer) {
+      clearTimeout(visitorLogFlushTimer);
+      visitorLogFlushTimer = null;
+    }
+    void flushQueuedVisitorLogs();
+    return;
+  }
+
+  scheduleVisitorLogFlush();
+}
+
+export async function flushQueuedVisitorLogs(): Promise<void> {
+  if (visitorLogFlushPromise) {
+    await visitorLogFlushPromise;
+    if (visitorLogQueue.length > 0) {
+      scheduleVisitorLogFlush();
+    }
+    return;
+  }
+
+  const batch = visitorLogQueue.splice(0, VISITOR_LOG_BATCH_SIZE);
+  if (batch.length === 0) {
+    return;
+  }
+
+  visitorLogFlushPromise = createVisitorLogsBatch(batch)
+    .catch((error: unknown) => {
+      visitorLogQueue = [...batch, ...visitorLogQueue];
+      // eslint-disable-next-line no-console
+      console.error('failed to persist visitor log batch', error);
+    })
+    .finally(() => {
+      visitorLogFlushPromise = null;
+    });
+
+  await visitorLogFlushPromise;
+
+  if (visitorLogQueue.length > 0) {
+    scheduleVisitorLogFlush();
+  }
+}
+
 export async function cleanupVisitorLogs(retentionDays = 30): Promise<number> {
+  await flushQueuedVisitorLogs();
   const db = await getDb();
   const threshold = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
   const result = await db.run('DELETE FROM visitor_logs WHERE created_at < ?', threshold);
@@ -57,6 +183,7 @@ export async function cleanupVisitorLogs(retentionDays = 30): Promise<number> {
 }
 
 export async function deleteAllVisitorLogs(): Promise<number> {
+  await flushQueuedVisitorLogs();
   const db = await getDb();
   const result = await db.run('DELETE FROM visitor_logs');
   return result.changes ?? 0;
@@ -134,6 +261,35 @@ export async function listBlacklistEntries(): Promise<BlacklistEntry[]> {
   }));
 }
 
+async function loadBlacklistCache(): Promise<Map<string, BlacklistEntry>> {
+  if (blacklistCache) {
+    return blacklistCache;
+  }
+
+  if (!blacklistCachePromise) {
+    blacklistCachePromise = listBlacklistEntries()
+      .then((entries) => {
+        blacklistCache = new Map(entries.map((entry) => [entry.ipAddress, entry]));
+        return blacklistCache;
+      })
+      .finally(() => {
+        blacklistCachePromise = null;
+      });
+  }
+
+  return blacklistCachePromise;
+}
+
+export async function getCachedBlacklistEntry(ipAddress: string): Promise<BlacklistEntry | null> {
+  const normalizedIpAddress = ipAddress.trim();
+  if (!normalizedIpAddress) {
+    return null;
+  }
+
+  const cache = await loadBlacklistCache();
+  return cache.get(normalizedIpAddress) ?? null;
+}
+
 export async function getBlacklistEntry(ipAddress: string): Promise<BlacklistEntry | null> {
   const db = await getDb();
   const row = await db.get<{
@@ -167,9 +323,19 @@ export async function upsertBlacklistEntry(ipAddress: string, reason: string): P
     now,
     now
   );
+  if (blacklistCache) {
+    const existing = blacklistCache.get(ipAddress);
+    blacklistCache.set(ipAddress, {
+      ipAddress,
+      reason,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now
+    });
+  }
 }
 
 export async function deleteBlacklistEntry(ipAddress: string): Promise<void> {
   const db = await getDb();
   await db.run('DELETE FROM visitor_blacklist WHERE ip_address = ?', ipAddress);
+  blacklistCache?.delete(ipAddress);
 }

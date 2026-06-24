@@ -11,9 +11,11 @@ import {
 } from './autoRedeemRetry.js';
 import { ensureRedeemTokenForAutoRedeem } from './autoRedeemToken.js';
 import { ExclusiveTaskRunner } from './exclusiveTaskRunner.js';
+import type { RedeemProgressPayload, RedeemSummary } from './redeemTypes.js';
 import { UniqueStringQueue } from './uniqueStringQueue.js';
 
 const AUTO_REDEEM_MAX_CODE_AGE_MS = 1000 * 60 * 60 * 24;
+const AUTO_REDEEM_PROGRESS_LOG_STEP = 10;
 
 function formatLogTime(): string {
   return new Date().toLocaleString('zh-CN', { hour12: false });
@@ -36,6 +38,59 @@ export class AutoRedeemCoordinator {
     this.redeemTaskRunner = new ExclusiveTaskRunner({
       isBlocked: () => this.options.redeemService.isRunning()
     });
+  }
+
+  private async runWithConsoleProgress<T extends RedeemSummary>(
+    label: string,
+    task: () => Promise<T>
+  ): Promise<T> {
+    let total = 0;
+    let lastLoggedProcessed = 0;
+
+    const shouldLogProgress = (processed: number): boolean => {
+      if (processed <= 0 || processed === lastLoggedProcessed) {
+        return false;
+      }
+      return processed === 1 || processed === total || processed % AUTO_REDEEM_PROGRESS_LOG_STEP === 0;
+    };
+
+    const onProgress = (payload: RedeemProgressPayload) => {
+      if (payload.type === 'start') {
+        total = payload.total ?? 0;
+        lastLoggedProcessed = 0;
+        // eslint-disable-next-line no-console
+        console.log(`[${formatLogTime()}] ${label}进度：0/${total}`);
+        return;
+      }
+
+      if (payload.type === 'progress') {
+        const processed = payload.processed ?? 0;
+        total = payload.total ?? total;
+        if (!shouldLogProgress(processed)) {
+          return;
+        }
+        lastLoggedProcessed = processed;
+        const percent = total > 0 ? Math.floor((processed / total) * 100) : 0;
+        // eslint-disable-next-line no-console
+        console.log(`[${formatLogTime()}] ${label}进度：${processed}/${total} (${percent}%)`);
+        return;
+      }
+
+      if (payload.type === 'done' && payload.summary) {
+        lastLoggedProcessed = payload.summary.processed;
+        // eslint-disable-next-line no-console
+        console.log(
+          `[${formatLogTime()}] ${label}汇总：已处理=${payload.summary.processed}/${payload.summary.total}，成功=${payload.summary.successCount}，已领取=${payload.summary.receivedCount}，失败=${payload.summary.failureCount}`
+        );
+      }
+    };
+
+    this.options.redeemService.on('progress', onProgress);
+    try {
+      return await task();
+    } finally {
+      this.options.redeemService.off('progress', onProgress);
+    }
   }
 
   async enqueueAutoRedeemCodes(codes: string[]): Promise<void> {
@@ -95,7 +150,9 @@ export class AutoRedeemCoordinator {
             await ensureRedeemTokenForAutoRedeem();
             // eslint-disable-next-line no-console
             console.log(`[${formatLogTime()}] 自动兑换开始：${code}`);
-            return runAllAccountsRedeemWithSingleFailureRetry(this.options.redeemService, code, formatLogTime);
+            return this.runWithConsoleProgress(`自动兑换 ${code}`, () =>
+              runAllAccountsRedeemWithSingleFailureRetry(this.options.redeemService, code, formatLogTime)
+            );
           });
           await completeRedeemCodeRedemption(code, summary);
           // eslint-disable-next-line no-console
@@ -131,27 +188,31 @@ export class AutoRedeemCoordinator {
           const [latestCode] = await listRedeemCodes(1);
           if (!latestCode) {
             // eslint-disable-next-line no-console
-            console.log(`new account latest-code redeem skipped, no redeem code found. accounts=${accountIds.length}`);
+            console.log(`新增账号补兑最新兑换码已跳过：未找到兑换码，账号数=${accountIds.length}`);
             continue;
           }
 
           await this.redeemTaskRunner.run(async () => {
             await ensureRedeemTokenForAutoRedeem();
             // eslint-disable-next-line no-console
-            console.log(`new account latest-code redeem started: code=${latestCode.code}, accounts=${accountIds.length}`);
-            const summary = await runTargetAccountsRedeemWithSingleFailureRetry(
-              this.options.redeemService,
-              latestCode.code,
-              accountIds
+            console.log(`新增账号触发补兑最新兑换码开始：code=${latestCode.code}，账号数=${accountIds.length}`);
+            const summary = await this.runWithConsoleProgress(
+              `新增账号补兑 ${latestCode.code}`,
+              () =>
+                runTargetAccountsRedeemWithSingleFailureRetry(
+                  this.options.redeemService,
+                  latestCode.code,
+                  accountIds
+                )
             );
             // eslint-disable-next-line no-console
             console.log(
-              `new account latest-code redeem completed: code=${latestCode.code}, processed=${summary.processed}, failed=${summary.failureCount}`
+              `新增账号触发补兑最新兑换码完成：code=${latestCode.code}，已处理=${summary.processed}，失败=${summary.failureCount}`
             );
           });
         } catch (error) {
           // eslint-disable-next-line no-console
-          console.error('new account latest-code redeem failed', error);
+          console.error('新增账号触发补兑最新兑换码失败', error);
         } finally {
           for (const accountId of accountIds) {
             this.newAccountRedeemQueue.release(accountId);

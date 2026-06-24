@@ -13,6 +13,7 @@ import { extractRedeemCodes, normalizeWhitespace } from './redeemCodeParser.js';
 
 const WECHAT_APPMSG_PUBLISH_URL = 'https://mp.weixin.qq.com/cgi-bin/appmsgpublish';
 const POLL_INTERVAL_MS = 60_000;
+const ARTICLE_DETAIL_CONCURRENCY = 3;
 const WECHAT_ARTICLE_USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.34(0x16082222) NetType/WIFI Language/zh_CN';
 
@@ -247,42 +248,73 @@ async function fetchWechatArticleHtml(url: string): Promise<string> {
   return response.text();
 }
 
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>
+): Promise<R[]> {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextIndex < items.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await mapper(items[currentIndex]);
+      }
+    })
+  );
+
+  return results;
+}
+
+async function fetchArticleDetailCodes(article: WechatArticleInput): Promise<RedeemCodeInput[]> {
+  try {
+    const html = await fetchWechatArticleHtml(article.link);
+    const text = extractArticleText(html);
+    await updateWechatArticleDetail({
+      aid: article.aid,
+      html,
+      text,
+      fetchStatus: 'ok',
+      fetchError: ''
+    });
+
+    return extractRedeemCodes(article.title, article.digest, text).map((code) => ({
+      code,
+      sourceId: article.aid,
+      sourceUrl: article.link,
+      title: article.title,
+      summary: article.digest || text.slice(0, 500),
+      content: text,
+      publishedAt: article.publishedAt
+    }));
+  } catch (error) {
+    await updateWechatArticleDetail({
+      aid: article.aid,
+      html: '',
+      text: '',
+      fetchStatus: 'failed',
+      fetchError: error instanceof Error ? error.message : '未知错误'
+    });
+    return [];
+  }
+}
+
 async function fetchArticleDetails(aids: string[]): Promise<RedeemCodeInput[]> {
   const articles = await listWechatArticlesNeedingDetailsByAids(aids);
+  const redeemCodeGroups = await mapWithConcurrency(articles, ARTICLE_DETAIL_CONCURRENCY, fetchArticleDetailCodes);
   const redeemCodes: RedeemCodeInput[] = [];
 
-  for (const article of articles) {
-    try {
-      const html = await fetchWechatArticleHtml(article.link);
-      const text = extractArticleText(html);
-      await updateWechatArticleDetail({
-        aid: article.aid,
-        html,
-        text,
-        fetchStatus: 'ok',
-        fetchError: ''
-      });
-
-      const codes = extractRedeemCodes(article.title, article.digest, text);
-      for (const code of codes) {
-        redeemCodes.push({
-          code,
-          sourceId: article.aid,
-          sourceUrl: article.link,
-          title: article.title,
-          summary: article.digest || text.slice(0, 500),
-          content: text,
-          publishedAt: article.publishedAt
-        });
-      }
-    } catch (error) {
-      await updateWechatArticleDetail({
-        aid: article.aid,
-        html: '',
-        text: '',
-        fetchStatus: 'failed',
-        fetchError: error instanceof Error ? error.message : '未知错误'
-      });
+  for (const codes of redeemCodeGroups) {
+    for (const code of codes) {
+      redeemCodes.push(code);
     }
   }
 

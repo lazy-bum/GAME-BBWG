@@ -67,18 +67,6 @@ export function bindListEvents({
     void renderLocal();
   });
 
-  document.querySelectorAll('[data-account-group-tab]').forEach((button) => {
-    button.addEventListener('click', () => {
-      const nextFilter = button.dataset.accountGroupTab;
-      if (!nextFilter || nextFilter === getAccountGroupFilter()) {
-        return;
-      }
-      setAccountGroupFilter(nextFilter);
-      setSelectedAccountIds(new Set());
-      void renderLocal();
-    });
-  });
-
   const selectVisibleAccounts = document.querySelector('#select-visible-accounts');
   selectVisibleAccounts?.addEventListener('change', () => {
     const selectedAccountIds = new Set(getSelectedAccountIds());
@@ -100,23 +88,6 @@ export function bindListEvents({
     }
     setSelectedAccountIds(selectedAccountIds);
     refreshSelectionUi(selectedAccountIds);
-  });
-
-  document.querySelectorAll('[data-select-account]').forEach((checkbox) => {
-    checkbox.addEventListener('change', () => {
-      const accountId = checkbox.dataset.selectAccount;
-      if (!accountId) {
-        return;
-      }
-      const selectedAccountIds = new Set(getSelectedAccountIds());
-      if (checkbox.checked) {
-        selectedAccountIds.add(accountId);
-      } else {
-        selectedAccountIds.delete(accountId);
-      }
-      setSelectedAccountIds(selectedAccountIds);
-      refreshSelectionUi(selectedAccountIds);
-    });
   });
 
   const applyAccountGroupButton = document.querySelector('#apply-account-group');
@@ -141,7 +112,18 @@ export function bindListEvents({
     }
   });
 
-  bindNamePopupEvents({ isNamePopupDismissBound, markNamePopupDismissBound });
+  bindDelegatedListEvents({
+    api,
+    render,
+    renderLocal,
+    getAccountGroupFilter,
+    setAccountGroupFilter,
+    getSelectedAccountIds,
+    setSelectedAccountIds,
+    setAccountBlacklistModalOpen,
+    isNamePopupDismissBound,
+    markNamePopupDismissBound
+  });
   bindReorderEvents({
     api,
     render,
@@ -150,61 +132,6 @@ export function bindListEvents({
     getFilters,
     getListAccountsCache,
     setListAccountsCache
-  });
-
-  document.querySelectorAll('[data-delete-account]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const accountId = button.dataset.deleteAccount;
-      if (!accountId) {
-        return;
-      }
-      button.disabled = true;
-      try {
-        await api(`/api/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
-        await render();
-      } finally {
-        button.disabled = false;
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-blacklist-account]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const accountId = button.dataset.blacklistAccount;
-      if (!accountId) {
-        return;
-      }
-      if (!window.confirm('确定将该账号加入黑名单吗？加入后不会出现在兑换列表，也不会参与兑换操作。')) {
-        return;
-      }
-
-      button.disabled = true;
-      try {
-        await api(`/api/accounts/${encodeURIComponent(accountId)}/blacklist`, { method: 'POST' });
-        setAccountBlacklistModalOpen(false);
-        await render();
-      } finally {
-        button.disabled = false;
-      }
-    });
-  });
-
-  document.querySelectorAll('[data-unblacklist-account]').forEach((button) => {
-    button.addEventListener('click', async () => {
-      const accountId = button.dataset.unblacklistAccount;
-      if (!accountId) {
-        return;
-      }
-
-      button.disabled = true;
-      try {
-        await api(`/api/accounts/${encodeURIComponent(accountId)}/blacklist`, { method: 'DELETE' });
-        setAccountBlacklistModalOpen(true);
-        await render();
-      } finally {
-        button.disabled = false;
-      }
-    });
   });
 }
 
@@ -224,27 +151,117 @@ function refreshSelectionUi(selectedAccountIds) {
   }
 }
 
-function bindNamePopupEvents({ isNamePopupDismissBound, markNamePopupDismissBound }) {
-  const namePopup = document.querySelector('#name-popup');
+function bindDelegatedListEvents({
+  api,
+  render,
+  renderLocal,
+  getAccountGroupFilter,
+  setAccountGroupFilter,
+  getSelectedAccountIds,
+  setSelectedAccountIds,
+  setAccountBlacklistModalOpen,
+  isNamePopupDismissBound,
+  markNamePopupDismissBound
+}) {
   const tablePanel = document.querySelector('.table-panel');
-  document.querySelectorAll('[data-full-game-name]').forEach((button) => {
-    button.addEventListener('click', (event) => {
+  tablePanel?.addEventListener('change', (event) => {
+    const checkbox = event.target?.closest?.('[data-select-account]');
+    if (!checkbox) {
+      return;
+    }
+
+    const accountId = checkbox.dataset.selectAccount;
+    if (!accountId) {
+      return;
+    }
+
+    const selectedAccountIds = new Set(getSelectedAccountIds());
+    if (checkbox.checked) {
+      selectedAccountIds.add(accountId);
+    } else {
+      selectedAccountIds.delete(accountId);
+    }
+    setSelectedAccountIds(selectedAccountIds);
+    refreshSelectionUi(selectedAccountIds);
+  });
+
+  tablePanel?.addEventListener('click', async (event) => {
+    const groupTab = event.target?.closest?.('[data-account-group-tab]');
+    if (groupTab) {
+      const nextFilter = groupTab.dataset.accountGroupTab;
+      if (!nextFilter || nextFilter === getAccountGroupFilter()) {
+        return;
+      }
+      setAccountGroupFilter(nextFilter);
+      setSelectedAccountIds(new Set());
+      void renderLocal();
+      return;
+    }
+
+    const nameButton = event.target?.closest?.('[data-full-game-name]');
+    if (nameButton) {
       event.stopPropagation();
-      if (!namePopup || !tablePanel) {
+      showNamePopup(nameButton);
+      return;
+    }
+
+    const deleteButton = event.target?.closest?.('[data-delete-account]');
+    if (deleteButton) {
+      const accountId = deleteButton.dataset.deleteAccount;
+      if (!accountId) {
+        return;
+      }
+      deleteButton.disabled = true;
+      try {
+        await api(`/api/accounts/${encodeURIComponent(accountId)}`, { method: 'DELETE' });
+        await render();
+      } finally {
+        deleteButton.disabled = false;
+      }
+      return;
+    }
+
+    const blacklistButton = event.target?.closest?.('[data-blacklist-account]');
+    if (blacklistButton) {
+      const accountId = blacklistButton.dataset.blacklistAccount;
+      if (!accountId) {
+        return;
+      }
+      if (!window.confirm('确定将该账号加入黑名单吗？加入后不会出现在兑换列表，也不会参与兑换操作。')) {
         return;
       }
 
-      const fullName = button.dataset.fullGameName ?? '';
-      const wasHidden = namePopup.hidden;
-      const isSameName = namePopup.textContent === fullName;
-      const buttonRect = button.getBoundingClientRect();
-      const panelRect = tablePanel.getBoundingClientRect();
+      blacklistButton.disabled = true;
+      try {
+        await api(`/api/accounts/${encodeURIComponent(accountId)}/blacklist`, { method: 'POST' });
+        setAccountBlacklistModalOpen(false);
+        await render();
+      } finally {
+        blacklistButton.disabled = false;
+      }
+    }
+  });
 
-      namePopup.textContent = fullName;
-      namePopup.style.left = `${buttonRect.left - panelRect.left + buttonRect.width / 2}px`;
-      namePopup.style.top = `${buttonRect.top - panelRect.top - 10}px`;
-      namePopup.hidden = isSameName ? !wasHidden : false;
-    });
+  const accountBlacklistModal = document.querySelector('#account-blacklist-modal');
+  accountBlacklistModal?.addEventListener('click', async (event) => {
+    const unblacklistButton = event.target?.closest?.('[data-unblacklist-account]');
+    if (!unblacklistButton) {
+      return;
+    }
+
+    const accountId = unblacklistButton.dataset.unblacklistAccount;
+    if (!accountId) {
+      return;
+    }
+
+    unblacklistButton.disabled = true;
+    try {
+      await api(`/api/accounts/${encodeURIComponent(accountId)}/blacklist`, { method: 'DELETE' });
+      setAccountBlacklistModalOpen(true);
+      await render();
+    } finally {
+      unblacklistButton.disabled = false;
+    }
   });
 
   if (!isNamePopupDismissBound()) {
@@ -256,6 +273,25 @@ function bindNamePopupEvents({ isNamePopupDismissBound, markNamePopupDismissBoun
     });
     markNamePopupDismissBound();
   }
+}
+
+function showNamePopup(button) {
+  const namePopup = document.querySelector('#name-popup');
+  const tablePanel = document.querySelector('.table-panel');
+  if (!namePopup || !tablePanel) {
+    return;
+  }
+
+  const fullName = button.dataset.fullGameName ?? '';
+  const wasHidden = namePopup.hidden;
+  const isSameName = namePopup.textContent === fullName;
+  const buttonRect = button.getBoundingClientRect();
+  const panelRect = tablePanel.getBoundingClientRect();
+
+  namePopup.textContent = fullName;
+  namePopup.style.left = `${buttonRect.left - panelRect.left + buttonRect.width / 2}px`;
+  namePopup.style.top = `${buttonRect.top - panelRect.top - 10}px`;
+  namePopup.hidden = isSameName ? !wasHidden : false;
 }
 
 function bindReorderEvents({ api, render, isAdmin, getCurrentRoute, getFilters, getListAccountsCache, setListAccountsCache }) {

@@ -1,5 +1,5 @@
 import type express from 'express';
-import { createVisitorLog, getBlacklistEntry } from '../core/visitorRepository.js';
+import { enqueueVisitorLog, getCachedBlacklistEntry } from '../core/visitorRepository.js';
 import type { AuthService } from './auth.js';
 import { normalizeIpAddress, sendJsonError } from './http.js';
 
@@ -73,7 +73,7 @@ export function createVisitorAuditMiddleware(authService: AuthService): express.
       }
 
       const session = authService.getSessionFromRequest(req);
-      void createVisitorLog({
+      enqueueVisitorLog({
         ipAddress: getClientIp(req),
         method: req.method,
         protocol: getRequestProtocol(req),
@@ -94,9 +94,6 @@ export function createVisitorAuditMiddleware(authService: AuthService): express.
         blocked: Boolean(res.locals.auditBlocked),
         blockReason: typeof res.locals.auditBlockReason === 'string' ? res.locals.auditBlockReason : '',
         createdAt: Date.now()
-      }).catch((error: unknown) => {
-        // eslint-disable-next-line no-console
-        console.error('failed to persist visitor log', error);
       });
     });
 
@@ -113,7 +110,7 @@ export function createVisitorBlacklistMiddleware(): express.RequestHandler {
         return;
       }
 
-      const blacklistEntry = await getBlacklistEntry(ipAddress);
+      const blacklistEntry = await getCachedBlacklistEntry(ipAddress);
       if (!blacklistEntry) {
         next();
         return;

@@ -30,9 +30,14 @@ export async function upsertWechatArticles(articles: WechatArticleInput[]): Prom
     const now = Date.now();
     const insertedAids: string[] = [];
     let updated = 0;
+    const placeholders = normalized.map(() => '?').join(',');
+    const existingRows = await db.all<{ aid: string }[]>(
+      `SELECT aid FROM wechat_articles WHERE aid IN (${placeholders})`,
+      normalized.map((article) => article.aid)
+    );
+    const existingAids = new Set(existingRows.map((row) => row.aid));
 
     for (const article of normalized) {
-      const existing = await db.get<{ aid: string }>('SELECT aid FROM wechat_articles WHERE aid = ?', article.aid);
       await db.run(
         `INSERT INTO wechat_articles (
           aid,
@@ -70,7 +75,7 @@ export async function upsertWechatArticles(articles: WechatArticleInput[]): Prom
         now
       );
 
-      if (existing) {
+      if (existingAids.has(article.aid)) {
         updated += 1;
       } else {
         insertedAids.push(article.aid);

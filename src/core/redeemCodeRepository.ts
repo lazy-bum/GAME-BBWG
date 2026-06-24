@@ -67,9 +67,14 @@ export async function upsertRedeemCodes(
     let updated = 0;
     const insertedCodes: string[] = [];
     const now = Date.now();
+    const placeholders = normalized.map(() => '?').join(',');
+    const existingRows = await db.all<{ code: string }[]>(
+      `SELECT code FROM redeem_codes WHERE code IN (${placeholders})`,
+      normalized.map((item) => item.code)
+    );
+    const existingCodes = new Set(existingRows.map((row) => row.code));
 
     for (const item of normalized) {
-      const existing = await db.get<{ code: string }>('SELECT code FROM redeem_codes WHERE code = ?', item.code);
       await db.run(
         `INSERT INTO redeem_codes (
           code,
@@ -101,7 +106,7 @@ export async function upsertRedeemCodes(
         now
       );
 
-      if (existing) {
+      if (existingCodes.has(item.code)) {
         updated += 1;
       } else {
         inserted += 1;

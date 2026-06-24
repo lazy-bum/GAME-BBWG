@@ -275,9 +275,8 @@ async function renderListPage(refreshData = true) {
     accountGroups = adminGroups;
     listDataLoaded = true;
   }
-  selectedAccountIds = new Set(
-    [...selectedAccountIds].filter((accountId) => listAccountsCache.some((account) => account.accountId === accountId))
-  );
+  const accountIdSet = new Set(listAccountsCache.map((account) => account.accountId));
+  selectedAccountIds = new Set([...selectedAccountIds].filter((accountId) => accountIdSet.has(accountId)));
   if (
     isAdminUser() &&
     accountGroupFilter !== 'all' &&
@@ -286,15 +285,17 @@ async function renderListPage(refreshData = true) {
   ) {
     accountGroupFilter = 'ungrouped';
   }
+  const normalizedAccountIdFilter = accountIdFilter.trim().toLowerCase();
+  const normalizedGameNameFilter = gameNameFilter.trim().toLowerCase();
   const filteredAccounts = listAccountsCache.filter((account) => {
     const groupMatches =
       !isAdminUser() ||
       accountGroupFilter === 'all' ||
       (accountGroupFilter === 'ungrouped' ? !account.groupId : account.groupId === accountGroupFilter);
     const accountIdMatches =
-      accountIdFilter.trim() === '' || account.accountId.toLowerCase().includes(accountIdFilter.trim().toLowerCase());
+      normalizedAccountIdFilter === '' || account.accountId.toLowerCase().includes(normalizedAccountIdFilter);
     const gameNameMatches =
-      gameNameFilter.trim() === '' || account.name.trim().toLowerCase().includes(gameNameFilter.trim().toLowerCase());
+      normalizedGameNameFilter === '' || account.name.trim().toLowerCase().includes(normalizedGameNameFilter);
     return groupMatches && accountIdMatches && gameNameMatches;
   });
   const allVisibleSelected =

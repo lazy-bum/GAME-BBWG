@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { forceSetAllAccountsRedeemed } from '../core/accountRepository.js';
+import { forceSetAllAccountsRedeemed, listAccountsByIdsIncludingDeleted } from '../core/accountRepository.js';
 import { RedeemAccountProcessor } from './redeemAccountProcessor.js';
 import { countRemainingRedeemAccounts, selectRedeemAccounts } from './redeemAccountSelector.js';
 import { RedeemCancelledError } from './redeemCancellation.js';
@@ -118,11 +118,20 @@ export class RedeemService extends EventEmitter {
       for (let index = 0; index < pendingAccounts.length; index += CHUNK_SIZE) {
         this.ensureNotCancelled();
         const chunk = pendingAccounts.slice(index, index + CHUNK_SIZE);
+        const latestAccounts = await listAccountsByIdsIncludingDeleted(
+          chunk.map((account) => account.accountId),
+          { includeBlacklisted: true }
+        );
+        const latestAccountMap = new Map(latestAccounts.map((account) => [account.accountId, account]));
 
         for (const account of chunk) {
           this.ensureNotCancelled();
           try {
-            const result = await accountProcessor.processAccount(account, trimmedCode);
+            const result = await accountProcessor.processAccount(
+              account,
+              trimmedCode,
+              latestAccountMap.get(account.accountId) ?? null
+            );
             runState.applyAccountResult(result);
           } finally {
             this.activeController = null;

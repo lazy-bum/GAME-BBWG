@@ -23,6 +23,9 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
     await db.exec("ALTER TABLE accounts ADD COLUMN group_id TEXT NOT NULL DEFAULT ''");
   }
   await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_group_id ON accounts(group_id)');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_status_active ON accounts(status, is_blacklisted, is_deleted)');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_active_order ON accounts(is_blacklisted, is_deleted, sort_order, created_at)');
+  await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_blacklist_order ON accounts(is_blacklisted, is_deleted, updated_at DESC)');
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS account_groups (
@@ -60,6 +63,7 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       created_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_visitor_logs_created_at ON visitor_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_visitor_logs_id_desc ON visitor_logs(id DESC);
     CREATE INDEX IF NOT EXISTS idx_visitor_logs_ip_address ON visitor_logs(ip_address);
     CREATE INDEX IF NOT EXISTS idx_visitor_logs_path ON visitor_logs(path);
     CREATE INDEX IF NOT EXISTS idx_visitor_logs_status_code ON visitor_logs(status_code);
@@ -89,6 +93,7 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
     );
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_last_seen_at ON redeem_codes(last_seen_at DESC);
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_published_at ON redeem_codes(published_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_redeem_codes_published_last_seen ON redeem_codes(published_at DESC, last_seen_at DESC);
   `);
 
   await db.exec(`

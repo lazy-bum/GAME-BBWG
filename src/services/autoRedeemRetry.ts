@@ -48,10 +48,10 @@ export async function runTargetAccountsRedeemWithSingleFailureRetry(
   }
 
   // eslint-disable-next-line no-console
-  console.log(`new account latest-code redeem retry started: code=${code}, accounts=${failedAccountIds.length}`);
+  console.log(`新增账号补兑最新兑换码失败账号重试开始：code=${code}，账号数=${failedAccountIds.length}`);
   const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds);
   // eslint-disable-next-line no-console
-  console.log(`new account latest-code redeem retry completed: code=${code}`);
+  console.log(`新增账号补兑最新兑换码失败账号重试完成：code=${code}`);
 
   return mergeRedeemSummaries(firstSummary, retrySummary);
 }

@@ -38,15 +38,18 @@ export class RedeemAccountProcessor {
     }
   ) {}
 
-  async processAccount(account: AccountRow, giftCode: string): Promise<RedeemAccountResult> {
+  async processAccount(account: AccountRow, giftCode: string, latestAccount?: AccountRow | null): Promise<RedeemAccountResult> {
     const displayName = account.name?.trim() || '未命名账号';
     try {
-      const [latestAccount] = await listAccountsByIdsIncludingDeleted([account.accountId], { includeBlacklisted: true });
-      if (!latestAccount || latestAccount.deleted) {
+      const currentAccount =
+        latestAccount === undefined
+          ? (await listAccountsByIdsIncludingDeleted([account.accountId], { includeBlacklisted: true }))[0]
+          : latestAccount;
+      if (!currentAccount || currentAccount.deleted) {
         this.options.log('warn', `已跳过已删除账号: ${displayName} (${account.accountId})`);
         return this.emptyResult();
       }
-      if (latestAccount.blacklisted) {
+      if (currentAccount.blacklisted) {
         this.options.log('warn', `已跳过黑名单账号: ${displayName} (${account.accountId})`);
         return this.emptyResult();
       }

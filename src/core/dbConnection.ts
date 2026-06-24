@@ -18,6 +18,11 @@ export async function getDb(): Promise<Database<sqlite3.Database, sqlite3.Statem
       filename: getDbPath(),
       driver: sqlite3.Database
     }).then(async (db) => {
+      await db.exec(`
+        PRAGMA journal_mode = WAL;
+        PRAGMA busy_timeout = 5000;
+        PRAGMA foreign_keys = ON;
+      `);
       await initSchema(db);
       return db;
     });
