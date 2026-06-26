@@ -20,7 +20,7 @@ export function registerRedeemRoutes({
   app.post('/api/redeem/run', requireRole('admin'), async (req, res) => {
     try {
       const { giftCode } = req.body as { giftCode?: string };
-      const result = await redeemService.runBatchRedeem(giftCode ?? '');
+      const result = await redeemService.runBatchRedeem(giftCode ?? '', undefined, { autoRetryFailedOnce: true });
       res.json({ ok: true, data: result });
     } catch (error) {
       res.json({
@@ -30,10 +30,30 @@ export function registerRedeemRoutes({
     }
   });
 
-  app.post('/api/redeem/retry-failed', requireRole('admin'), async (req, res) => {
+  app.post('/api/redeem/run-many', requireRole('admin'), async (req, res) => {
     try {
-      const { giftCode, accountIds } = req.body as { giftCode?: string; accountIds?: string[] };
-      const result = await redeemService.runBatchRedeem(giftCode ?? '', Array.isArray(accountIds) ? accountIds : []);
+      const { giftCodes } = req.body as { giftCodes?: string[] };
+      const result = await redeemService.runMultiCodeRedeem(Array.isArray(giftCodes) ? giftCodes : []);
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      res.json({
+        ok: false,
+        error: error instanceof Error ? error.message : '未知错误'
+      });
+    }
+  });
+
+  app.post('/api/redeem/retry-code-failures', requireRole('admin'), async (req, res) => {
+    try {
+      const { failures } = req.body as { failures?: Array<{ giftCode?: string; accountIds?: string[] }> };
+      const result = await redeemService.runCodeFailureRedeem(
+        Array.isArray(failures)
+          ? failures.map((item) => ({
+              giftCode: item.giftCode ?? '',
+              accountIds: Array.isArray(item.accountIds) ? item.accountIds : []
+            }))
+          : []
+      );
       res.json({ ok: true, data: result });
     } catch (error) {
       res.json({

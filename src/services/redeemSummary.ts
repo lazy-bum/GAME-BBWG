@@ -8,6 +8,7 @@ export function mergeRedeemSummaries(firstSummary: RedeemSummary, retrySummary: 
     receivedCount: firstSummary.receivedCount + retrySummary.receivedCount,
     failureCount: retrySummary.failureCount,
     remaining: retrySummary.remaining,
-    resetTriggered: firstSummary.resetTriggered || retrySummary.resetTriggered
+    resetTriggered: firstSummary.resetTriggered || retrySummary.resetTriggered,
+    failedAccountIds: retrySummary.failedAccountIds
   };
 }

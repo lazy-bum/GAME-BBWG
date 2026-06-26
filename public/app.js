@@ -23,6 +23,7 @@ import { createShell } from './js/views/shellView.js';
 import { renderVisitorPage as renderVisitorView } from './js/views/visitorView.js';
 
 const app = document.querySelector('#app');
+const MAX_REDEEM_LOGS = 300;
 let currentRoute = 'home';
 let authChecked = false;
 let isAuthenticated = false;
@@ -43,8 +44,13 @@ let redeemToken = '';
 let redeemIsRunning = false;
 let redeemProcessed = 0;
 let redeemTotal = 0;
-let redeemSummary = null;
+let redeemCodeProcessed = 0;
+let redeemCodeTotal = 0;
+let redeemCurrentCode = '';
+let redeemCodeSummaries = [];
 let redeemLogs = [];
+let redeemLogsVersion = 0;
+let redeemCodeSummariesVersion = 0;
 let redeemProgressSubscribed = false;
 let redeemConfigLoaded = false;
 let redeemAccounts = [];
@@ -104,8 +110,11 @@ function ensureEventSource() {
       if (payload.type === 'start') {
         redeemTotal = payload.total ?? 0;
         redeemProcessed = payload.processed ?? 0;
-        redeemLogs = [];
-        redeemSummary = null;
+        if (payload.totalCodes) {
+          redeemCodeTotal = payload.totalCodes;
+          redeemCodeProcessed = Math.max(0, (payload.currentCodeIndex ?? 1) - 1);
+          redeemCurrentCode = payload.currentCode ?? '';
+        }
       }
 
       if (payload.type === 'log' && payload.message) {
@@ -115,17 +124,34 @@ function ensureEventSource() {
             level: payload.level ?? 'info',
             message: payload.message
           }
-        ];
+        ].slice(-MAX_REDEEM_LOGS);
+        redeemLogsVersion += 1;
         syncRedeemStatusFromLog(payload.message);
       }
 
       if (payload.type === 'progress') {
         redeemProcessed = payload.processed ?? redeemProcessed;
         redeemTotal = payload.total ?? redeemTotal;
+        if (payload.totalCodes) {
+          redeemCodeTotal = payload.totalCodes;
+          redeemCodeProcessed = Math.max(0, (payload.currentCodeIndex ?? 1) - 1);
+          redeemCurrentCode = payload.currentCode ?? redeemCurrentCode;
+        }
       }
 
       if (payload.type === 'done' && payload.summary) {
-        redeemSummary = payload.summary;
+        redeemProcessed = payload.summary.processed ?? redeemProcessed;
+        redeemTotal = payload.summary.total ?? redeemTotal;
+        if (payload.currentCode) {
+          redeemCodeTotal = payload.totalCodes ?? redeemCodeTotal;
+          redeemCodeProcessed = payload.currentCodeIndex ?? redeemCodeProcessed;
+          redeemCurrentCode = payload.currentCode;
+          redeemCodeSummaries = [
+            ...redeemCodeSummaries.filter((item) => item.giftCode !== payload.currentCode),
+            { giftCode: payload.currentCode, summary: payload.summary }
+          ];
+          redeemCodeSummariesVersion += 1;
+        }
       }
 
       refreshRedeemUi();
@@ -455,8 +481,15 @@ async function render({ refreshData = true } = {}) {
       redeemIsRunning,
       redeemProcessed,
       redeemTotal,
+      redeemCodeProcessed,
+      redeemCodeTotal,
+      redeemCurrentCode,
+      redeemCodeSummaries,
+      redeemLogs,
+      redeemLogsVersion,
+      redeemCodeSummariesVersion,
       redeemAccounts,
-      retryableAccountIds: getRetryableAccountIds(),
+      retryableCodeFailures: getRetryableCodeFailures(),
       getRedeemStatusView
     });
   }
@@ -595,9 +628,10 @@ function bindEvents() {
     render,
     getCurrentRoute: () => currentRoute,
     getRedeemCode: () => redeemCode,
+    getRedeemIsRunning: () => redeemIsRunning,
     persistRedeemCode,
     getRedeemAccounts: () => redeemAccounts,
-    getRetryableAccountIds,
+    getRetryableCodeFailures,
     setRedeemToken: (value) => {
       redeemToken = value;
     },
@@ -607,13 +641,35 @@ function bindEvents() {
     setRedeemState: (patch) => {
       const nextPatch =
         typeof patch === 'function'
-          ? patch({ redeemLogs, redeemStatuses, redeemSummary, redeemAccounts, redeemIsRunning, redeemProcessed, redeemTotal })
+          ? patch({
+              redeemLogs,
+              redeemStatuses,
+              redeemAccounts,
+              redeemIsRunning,
+              redeemProcessed,
+              redeemTotal,
+              redeemCodeProcessed,
+              redeemCodeTotal,
+              redeemCurrentCode,
+              redeemCodeSummaries,
+              redeemLogsVersion,
+              redeemCodeSummariesVersion
+            })
           : patch;
       if (Object.hasOwn(nextPatch, 'redeemIsRunning')) redeemIsRunning = nextPatch.redeemIsRunning;
       if (Object.hasOwn(nextPatch, 'redeemProcessed')) redeemProcessed = nextPatch.redeemProcessed;
       if (Object.hasOwn(nextPatch, 'redeemTotal')) redeemTotal = nextPatch.redeemTotal;
-      if (Object.hasOwn(nextPatch, 'redeemSummary')) redeemSummary = nextPatch.redeemSummary;
-      if (Object.hasOwn(nextPatch, 'redeemLogs')) redeemLogs = nextPatch.redeemLogs;
+      if (Object.hasOwn(nextPatch, 'redeemCodeProcessed')) redeemCodeProcessed = nextPatch.redeemCodeProcessed;
+      if (Object.hasOwn(nextPatch, 'redeemCodeTotal')) redeemCodeTotal = nextPatch.redeemCodeTotal;
+      if (Object.hasOwn(nextPatch, 'redeemCurrentCode')) redeemCurrentCode = nextPatch.redeemCurrentCode;
+      if (Object.hasOwn(nextPatch, 'redeemCodeSummaries')) {
+        redeemCodeSummaries = nextPatch.redeemCodeSummaries;
+        redeemCodeSummariesVersion += 1;
+      }
+      if (Object.hasOwn(nextPatch, 'redeemLogs')) {
+        redeemLogs = nextPatch.redeemLogs.slice(-MAX_REDEEM_LOGS);
+        redeemLogsVersion += 1;
+      }
       if (Object.hasOwn(nextPatch, 'redeemStatuses')) redeemStatuses = nextPatch.redeemStatuses;
       if (Object.hasOwn(nextPatch, 'redeemAccounts')) redeemAccounts = nextPatch.redeemAccounts;
     }
@@ -638,12 +694,23 @@ function refreshRedeemUi() {
   refreshRedeemDom({
     redeemTotal,
     redeemProcessed,
+    redeemCodeProcessed,
+    redeemCodeTotal,
+    redeemCurrentCode,
+    redeemCodeSummaries,
+    redeemLogs,
+    redeemLogsVersion,
+    redeemCodeSummariesVersion,
     redeemIsRunning,
     redeemCode,
     redeemAccounts,
-    retryableAccountIds: getRetryableAccountIds(),
+    retryableCodeFailures: getRetryableCodeFailures(),
     getRedeemStatusView
   });
+
+  if ((redeemCodeSummaries.length > 0 && !document.querySelector('.redeem-summary')) || (redeemLogs.length > 0 && !document.querySelector('.redeem-log-panel'))) {
+    void render({ refreshData: false });
+  }
 }
 
 function refreshCreateUi() {
@@ -725,10 +792,13 @@ function syncRedeemStatusFromLog(message) {
   }
 }
 
-function getRetryableAccountIds() {
-  return redeemAccounts
-    .filter((account) => getRedeemStatusView(account).code === ACCOUNT_STATUS.failed)
-    .map((account) => account.accountId);
+function getRetryableCodeFailures() {
+  return redeemCodeSummaries
+    .map((item) => ({
+      giftCode: item.giftCode,
+      accountIds: Array.isArray(item.summary?.failedAccountIds) ? item.summary.failedAccountIds : []
+    }))
+    .filter((item) => item.giftCode && item.accountIds.length > 0);
 }
 
 function updateLocalAccountStatus(accountId, status) {

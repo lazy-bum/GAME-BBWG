@@ -6,6 +6,18 @@ export interface RedeemSummary {
   failureCount: number;
   remaining: number;
   resetTriggered: boolean;
+  failedAccountIds: string[];
+}
+
+export interface MultiRedeemCodeSummary {
+  giftCode: string;
+  summary: RedeemSummary;
+}
+
+export interface MultiRedeemSummary {
+  totalCodes: number;
+  processedCodes: number;
+  summaries: MultiRedeemCodeSummary[];
 }
 
 export interface RedeemProgressPayload {
@@ -15,11 +27,16 @@ export interface RedeemProgressPayload {
   processed?: number;
   total?: number;
   summary?: RedeemSummary;
+  currentCode?: string;
+  currentCodeIndex?: number;
+  totalCodes?: number;
 }
 
 export interface RedeemRunOptions {
   includeAllAccounts?: boolean;
   includeTargetAccounts?: boolean;
+  initialDelayMs?: number;
+  autoRetryFailedOnce?: boolean;
 }
 
 export interface ApiEnvelope {

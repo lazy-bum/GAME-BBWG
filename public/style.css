@@ -466,6 +466,10 @@ button {
   align-items: center;
 }
 
+.redeem-code-toolbar {
+  align-items: flex-start;
+}
+
 .visitor-toolbar {
   display: flex;
   gap: 12px;
@@ -571,6 +575,20 @@ button {
   width: min(100%, 360px);
 }
 
+.redeem-code-field {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 360px);
+}
+
+.redeem-code-textarea {
+  width: 100%;
+  min-height: 92px;
+  line-height: 1.45;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
 .visitor-reason-input {
   width: min(100%, 420px);
 }
@@ -602,6 +620,95 @@ button {
 .redeem-progress-text {
   color: #526079;
   font-size: 14px;
+}
+
+.redeem-code-progress-text {
+  color: #355070;
+  font-weight: 700;
+}
+
+.redeem-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #355070;
+}
+
+.redeem-summary,
+.redeem-log-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.redeem-summary-table {
+  border-radius: 16px;
+}
+
+.redeem-summary-table table {
+  table-layout: fixed;
+}
+
+.failed-account-details {
+  display: grid;
+  gap: 8px;
+}
+
+.failed-account-details summary {
+  cursor: pointer;
+  color: #355070;
+  font-weight: 700;
+}
+
+.failed-account-list {
+  display: grid;
+  gap: 4px;
+  max-height: 140px;
+  overflow: auto;
+  color: #526079;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.failed-account-copy {
+  min-width: 0;
+  width: max-content;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.redeem-log-list {
+  max-height: 260px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.redeem-log-line {
+  padding: 6px 0;
+  color: #526079;
+  font-size: 13px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.redeem-log-line + .redeem-log-line {
+  border-top: 1px solid rgba(20, 33, 61, 0.06);
+}
+
+.redeem-log-line[data-level="success"] {
+  color: #067647;
+}
+
+.redeem-log-line[data-level="warn"] {
+  color: #b54708;
+}
+
+.redeem-log-line[data-level="error"] {
+  color: #b42318;
 }
 
 .field-label {

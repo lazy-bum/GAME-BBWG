@@ -1,6 +1,6 @@
 import { listAccountsByStatus } from '../core/accountRepository.js';
 import { ACCOUNT_STATUS } from '../core/dbTypes.js';
-import type { RedeemService } from './redeem.js';
+import { REDEEM_CODE_DELAY_MS, type RedeemService } from './redeem.js';
 import type { RedeemSummary } from './redeemTypes.js';
 import { mergeRedeemSummaries } from './redeemSummary.js';
 
@@ -21,8 +21,8 @@ export async function runAllAccountsRedeemWithSingleFailureRetry(
   }
 
   // eslint-disable-next-line no-console
-  console.log(`[${formatLogTime()}] 自动兑换失败账号重试开始：${code}，失败账号数=${failedAccountIds.length}`);
-  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds);
+  console.log(`[${formatLogTime()}] 自动兑换失败账号重试将在 ${REDEEM_CODE_DELAY_MS / 1000} 秒后开始：${code}`);
+  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, { initialDelayMs: REDEEM_CODE_DELAY_MS });
   // eslint-disable-next-line no-console
   console.log(`[${formatLogTime()}] 自动兑换失败账号重试结束：${code}`);
 
@@ -48,8 +48,8 @@ export async function runTargetAccountsRedeemWithSingleFailureRetry(
   }
 
   // eslint-disable-next-line no-console
-  console.log(`新增账号补兑最新兑换码失败账号重试开始：code=${code}，账号数=${failedAccountIds.length}`);
-  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds);
+  console.log(`新增账号补兑最新兑换码失败账号重试将在 ${REDEEM_CODE_DELAY_MS / 1000} 秒后开始：code=${code}，账号数=${failedAccountIds.length}`);
+  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, { initialDelayMs: REDEEM_CODE_DELAY_MS });
   // eslint-disable-next-line no-console
   console.log(`新增账号补兑最新兑换码失败账号重试完成：code=${code}`);
 

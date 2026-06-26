@@ -6,6 +6,7 @@ export class RedeemRunState {
   successCount = 0;
   receivedCount = 0;
   failureCount = 0;
+  private readonly failedAccountIds = new Set<string>();
 
   constructor(
     readonly total: number,
@@ -22,6 +23,10 @@ export class RedeemRunState {
     this.failureCount += result.failureCount;
   }
 
+  markFailedAccount(accountId: string): void {
+    this.failedAccountIds.add(accountId);
+  }
+
   toSummary(remaining: number): RedeemSummary {
     return {
       total: this.total,
@@ -30,7 +35,8 @@ export class RedeemRunState {
       receivedCount: this.receivedCount,
       failureCount: this.failureCount,
       remaining,
-      resetTriggered: this.resetTriggered
+      resetTriggered: this.resetTriggered,
+      failedAccountIds: Array.from(this.failedAccountIds)
     };
   }
 }
