@@ -123,7 +123,7 @@ export function renderRedeemPage(shell, state) {
         }
       </div>
     `
-    : '<div class="feedback" data-state="success">当前为临时账号，只可查看兑换状态。</div>';
+    : '<div class="feedback" data-state="success">当前为普通用户，只可查看兑换状态。</div>';
   const rows =
     state.redeemAccounts.length === 0
       ? '<div class="empty-state">当前没有可兑换账号。</div>'

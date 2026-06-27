@@ -22,6 +22,11 @@ export function renderHomePage(shell, { isAdmin }) {
           ${
             isAdmin
               ? `
+          <button class="nav-card home-nav-card" data-route="users">
+            <span class="home-card-glow"></span>
+            <span class="home-card-label">系统用户</span>
+            <span class="home-card-meta">新增普通用户并查看管理员/普通用户列表</span>
+          </button>
           <button class="nav-card home-nav-card" data-route="redeem-codes">
             <span class="home-card-glow"></span>
             <span class="home-card-label">兑换码管理</span>

@@ -3,6 +3,17 @@ import sqlite3 from 'sqlite3';
 
 export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statement>): Promise<void> {
   await db.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      username TEXT PRIMARY KEY COLLATE NOCASE,
+      password_hash TEXT NOT NULL DEFAULT '',
+      role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_role_created_at ON users(role, created_at ASC);
+  `);
+
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS accounts (
       account_id TEXT PRIMARY KEY,
       name TEXT NOT NULL DEFAULT '',

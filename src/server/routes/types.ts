@@ -16,5 +16,4 @@ export interface ApiRouteContext {
   sseHub: SseHub;
   pollActiveRedeemCodeSource: () => Promise<{ insertedCodes: string[] }>;
   visitorLogRetentionDays: number;
-  hasAdminCredentials: boolean;
 }

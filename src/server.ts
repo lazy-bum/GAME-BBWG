@@ -24,13 +24,7 @@ const redeemCodeSource = new ActiveRedeemCodeSource(process.argv.includes('--wec
   forceWechatLogin: process.argv.includes('--force-wechat-login')
 });
 
-const adminUsername = process.env.ADMIN_USERNAME?.trim() || '';
-const adminPassword = process.env.ADMIN_PASSWORD?.trim() || '';
 const authService = new AuthService({
-  adminUsername,
-  adminPassword,
-  tempUsername: process.env.TEMP_USERNAME?.trim() || '',
-  tempPassword: process.env.TEMP_PASSWORD?.trim() || '',
   sessionSecret: process.env.SESSION_SECRET?.trim() || 'bbwg-dev-session-secret'
 });
 
@@ -74,8 +68,7 @@ registerApiRoutes({
   autoRedeemCoordinator,
   sseHub,
   pollActiveRedeemCodeSource: () => redeemCodeSource.poll(),
-  visitorLogRetentionDays: VISITOR_LOG_RETENTION_DAYS,
-  hasAdminCredentials: Boolean(adminUsername && adminPassword)
+  visitorLogRetentionDays: VISITOR_LOG_RETENTION_DAYS
 });
 
 app.get('*', (_req, res) => {

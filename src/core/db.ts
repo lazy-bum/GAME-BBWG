@@ -1,5 +1,12 @@
 export { getDb } from './dbConnection.js';
 export {
+  countUsers,
+  createInitialAdmin,
+  createUser,
+  findUserByUsername,
+  listUsers
+} from './userRepository.js';
+export {
   countAccountsByStatus,
   createAccountsBatch,
   deleteAccount,
@@ -61,6 +68,9 @@ export type {
   RedeemCodeRedemptionSummaryInput,
   RedeemCodeRow,
   RedeemCodeValidityType,
+  UserAuthRow,
+  UserRole,
+  UserRow,
   VisitorLogInput,
   VisitorLogRow,
   WechatArticleDetailInput,

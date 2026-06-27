@@ -221,6 +221,12 @@ button {
   text-align: center;
 }
 
+.auth-title {
+  margin: 0 0 10px;
+  font-size: 28px;
+  color: #14213d;
+}
+
 .nav-card {
   width: 100%;
   min-height: 104px;
@@ -730,6 +736,11 @@ button {
   margin-bottom: 16px;
 }
 
+.users-create-panel {
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
 .group-tabs {
   display: flex;
   gap: 10px;
@@ -815,6 +826,27 @@ button {
   font-size: 13px;
   white-space: normal;
   word-break: break-word;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.role-badge.is-admin {
+  background: rgba(53, 80, 112, 0.12);
+  color: #355070;
+}
+
+.role-badge.is-user {
+  background: rgba(18, 183, 106, 0.1);
+  color: #067647;
 }
 
 .redeem-input {
@@ -1135,6 +1167,10 @@ button {
 
 .blacklist-wrap table {
   min-width: 760px;
+}
+
+.user-table-wrap table {
+  min-width: 520px;
 }
 
 .blacklist-empty {

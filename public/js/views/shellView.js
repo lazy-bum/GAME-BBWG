@@ -1,7 +1,12 @@
 import { escapeHtml } from '../html.js';
 
-export function createShell(content, { currentRoute, authUsername, pageClass = '' }) {
+function getRoleText(role) {
+  return role === 'admin' ? '管理员' : role === 'user' ? '普通用户' : '';
+}
+
+export function createShell(content, { currentRoute, authUsername, authRole, pageClass = '' }) {
   const showHomeActions = currentRoute === 'home';
+  const roleText = getRoleText(authRole);
   return `
     <main class="shell ${pageClass}">
       <section class="frame">
@@ -11,7 +16,7 @@ export function createShell(content, { currentRoute, authUsername, pageClass = '
             showHomeActions
               ? `
           <div class="topbar-actions">
-            <span class="user-chip">${escapeHtml(authUsername)}</span>
+            <span class="user-chip">${escapeHtml(authUsername)}${roleText ? ` · ${escapeHtml(roleText)}` : ''}</span>
             <button class="secondary-button" id="logout-button">退出登录</button>
           </div>
           `

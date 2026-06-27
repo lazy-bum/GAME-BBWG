@@ -9,6 +9,7 @@ import { bindMediaEvents } from './js/events/mediaEvents.js';
 import { bindRedeemEvents } from './js/events/redeemEvents.js';
 import { bindRedeemCodeManagementEvents } from './js/events/redeemCodeManagementEvents.js';
 import { bindRouteEvents } from './js/events/routeEvents.js';
+import { bindUserEvents } from './js/events/userEvents.js';
 import { bindVisitorEvents } from './js/events/visitorEvents.js';
 import { extractFailureReason, getDefaultRedeemStatus } from './js/redeemStatus.js';
 import { REDEEM_TARGET_MODE } from './js/redeemTargets.js';
@@ -26,6 +27,7 @@ import { renderLoginPage as renderLoginView } from './js/views/loginView.js';
 import { renderRedeemCodeManagementPage as renderRedeemCodeManagementView } from './js/views/redeemCodeManagementView.js';
 import { renderRedeemPage as renderRedeemView } from './js/views/redeemView.js';
 import { createShell } from './js/views/shellView.js';
+import { renderUsersPage as renderUsersView } from './js/views/usersView.js';
 import { renderVisitorPage as renderVisitorView } from './js/views/visitorView.js';
 
 const app = document.querySelector('#app');
@@ -36,6 +38,7 @@ let isAuthenticated = false;
 let authUsername = '';
 let authRole = '';
 let authError = '';
+let allowRegistration = false;
 let accountIdFilter = '';
 let gameNameFilter = '';
 let importIsRunning = false;
@@ -81,11 +84,13 @@ let visitorPathFilter = '';
 let visitorVisibleCount = 10;
 let redeemCodeItems = [];
 let redeemCodeFailedAccountsModal = null;
+let systemUsers = [];
 let listDataLoaded = false;
 let redeemAccountsLoaded = false;
 let groupsDataLoaded = false;
 let visitorsDataLoaded = false;
 let redeemCodesDataLoaded = false;
+let usersDataLoaded = false;
 
 let eventSource = null;
 let importEventSource = null;
@@ -276,7 +281,7 @@ function closeImportEventSource() {
 
 function getRouteFromHash() {
   const hash = window.location.hash.replace('#', '');
-  if (hash === 'create' || hash === 'list' || hash === 'redeem' || hash === 'redeem-codes' || hash === 'groups' || hash === 'visitors') {
+  if (hash === 'create' || hash === 'list' || hash === 'redeem' || hash === 'redeem-codes' || hash === 'groups' || hash === 'visitors' || hash === 'users') {
     return hash;
   }
   return 'home';
@@ -304,7 +309,7 @@ function navigate(route) {
 }
 
 function shell(content, pageClass = '') {
-  return createShell(content, { currentRoute, authUsername, pageClass });
+  return createShell(content, { currentRoute, authUsername, authRole, pageClass });
 }
 
 function normalizeRedeemTargetSelection() {
@@ -428,7 +433,7 @@ async function render({ refreshData = true } = {}) {
   }
 
   if (!isAuthenticated) {
-    app.innerHTML = renderLoginView({ authError });
+    app.innerHTML = renderLoginView({ authError, allowRegistration });
     bindEvents();
     return;
   }
@@ -442,7 +447,7 @@ async function render({ refreshData = true } = {}) {
     redeemConfigLoaded = true;
   }
 
-  if ((currentRoute === 'visitors' || currentRoute === 'groups' || currentRoute === 'redeem-codes') && !isAdminUser()) {
+  if ((currentRoute === 'visitors' || currentRoute === 'groups' || currentRoute === 'redeem-codes' || currentRoute === 'users') && !isAdminUser()) {
     currentRoute = 'home';
     window.location.hash = '';
   }
@@ -480,6 +485,11 @@ async function render({ refreshData = true } = {}) {
     groupsDataLoaded = true;
   }
 
+  if (currentRoute === 'users' && isAdminUser() && refreshData) {
+    systemUsers = await api('/api/users');
+    usersDataLoaded = true;
+  }
+
   if (sequence !== renderSequence || route !== currentRoute) {
     return;
   }
@@ -504,6 +514,8 @@ async function render({ refreshData = true } = {}) {
     app.innerHTML = listHtml;
   } else if (currentRoute === 'groups' && isAdminUser()) {
     app.innerHTML = renderGroupsView(shell, { accountGroups });
+  } else if (currentRoute === 'users' && isAdminUser()) {
+    app.innerHTML = renderUsersView(shell, { users: systemUsers });
   } else if (currentRoute === 'redeem-codes' && isAdminUser()) {
     app.innerHTML = renderRedeemCodeManagementView(shell, {
       isAdmin: isAdminUser(),
@@ -562,12 +574,17 @@ function bindEvents() {
       setAuthError: (message) => {
         authError = message;
       },
+      getAllowRegistration: () => allowRegistration,
+      setAllowRegistration: (value) => {
+        allowRegistration = value;
+      },
       onLoginSuccess: ({ username, role }) => {
         isAuthenticated = true;
         authUsername = username;
         authRole = role;
         redeemConfigLoaded = false;
         authError = '';
+        allowRegistration = false;
         ensureEventSource();
       }
     });
@@ -589,6 +606,7 @@ function bindEvents() {
       authRole = '';
       authChecked = true;
       redeemConfigLoaded = false;
+      allowRegistration = false;
       redeemAccounts = [];
       redeemStatuses = {};
       blacklistedAccounts = [];
@@ -607,11 +625,13 @@ function bindEvents() {
       visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
       redeemCodeItems = [];
       redeemCodeFailedAccountsModal = null;
+      systemUsers = [];
       listDataLoaded = false;
       redeemAccountsLoaded = false;
       groupsDataLoaded = false;
       visitorsDataLoaded = false;
       redeemCodesDataLoaded = false;
+      usersDataLoaded = false;
       disconnectVisitorLogObserver();
       closeEventSource();
       closeImportEventSource();
@@ -633,6 +653,7 @@ function bindEvents() {
     }
   });
   bindGroupEvents({ api, render });
+  bindUserEvents({ api, render });
   bindRedeemCodeManagementEvents({
     api,
     render,
@@ -910,6 +931,7 @@ window.addEventListener('hashchange', () => {
     (currentRoute === 'redeem-codes' && redeemCodesDataLoaded) ||
     (currentRoute === 'groups' && groupsDataLoaded) ||
     (currentRoute === 'visitors' && visitorsDataLoaded) ||
+    (currentRoute === 'users' && usersDataLoaded) ||
     currentRoute === 'home' ||
     currentRoute === 'create';
   void render({ refreshData: !hasCachedData });
@@ -924,11 +946,13 @@ async function bootstrap() {
     isAuthenticated = Boolean(status.authenticated);
     authUsername = status.username || '';
     authRole = status.role || '';
+    allowRegistration = Boolean(status.allowRegistration);
   } catch {
     authChecked = true;
     isAuthenticated = false;
     authUsername = '';
     authRole = '';
+    allowRegistration = false;
   }
 
   if (isAuthenticated) {

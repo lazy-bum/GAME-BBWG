@@ -5,6 +5,18 @@ export const ACCOUNT_STATUS = {
 } as const;
 
 export type AccountStatus = (typeof ACCOUNT_STATUS)[keyof typeof ACCOUNT_STATUS];
+export type UserRole = 'admin' | 'user';
+
+export interface UserRow {
+  username: string;
+  role: UserRole;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface UserAuthRow extends UserRow {
+  passwordHash: string;
+}
 
 export interface AccountRow {
   accountId: string;

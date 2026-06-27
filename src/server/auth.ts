@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import type express from 'express';
+import { findUserByUsername } from '../core/userRepository.js';
+import type { UserRole } from '../core/dbTypes.js';
+import { verifyPassword } from './userPassword.js';
 
-export type UserRole = 'admin' | 'temp';
 export type SessionRecord = { username: string; role: UserRole; expiresAt: number };
 
 const SESSION_COOKIE_NAME = 'bbwg_session';
@@ -40,29 +42,10 @@ function base64UrlEncode(value: Buffer | string): string {
     .replaceAll('=', '');
 }
 
-function safeCompare(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-
-  if (leftBuffer.length !== rightBuffer.length) {
-    return false;
-  }
-
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
-}
-
 export class AuthService {
   private readonly sessions = new Map<string, SessionRecord>();
 
-  constructor(
-    private readonly options: {
-      adminUsername: string;
-      adminPassword: string;
-      tempUsername: string;
-      tempPassword: string;
-      sessionSecret: string;
-    }
-  ) {}
+  constructor(private readonly options: { sessionSecret: string }) {}
 
   getSessionFromRequest(req: express.Request): SessionRecord | null {
     this.clearExpiredSessions();
@@ -119,24 +102,20 @@ export class AuthService {
     }
   }
 
-  verifyCredentials(username: string, password: string): UserRole | null {
-    if (
-      this.options.adminUsername &&
-      username === this.options.adminUsername &&
-      safeCompare(password, this.options.adminPassword)
-    ) {
-      return 'admin';
+  async verifyCredentials(username: string, password: string): Promise<{ username: string; role: UserRole } | null> {
+    const user = await findUserByUsername(username);
+    if (!user) {
+      return null;
     }
 
-    if (
-      this.options.tempUsername &&
-      username === this.options.tempUsername &&
-      safeCompare(password, this.options.tempPassword)
-    ) {
-      return 'temp';
+    if (!verifyPassword(password, user.passwordHash)) {
+      return null;
     }
 
-    return null;
+    return {
+      username: user.username,
+      role: user.role
+    };
   }
 
   requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction): void => {

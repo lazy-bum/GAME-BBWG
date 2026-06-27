@@ -1,4 +1,4 @@
-export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError }) {
+export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError, getAllowRegistration, setAllowRegistration }) {
   const loginButton = document.querySelector('#login-button');
   loginButton?.addEventListener('click', async () => {
     const usernameInput = document.querySelector('#login-username');
@@ -14,7 +14,8 @@ export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError }) {
 
     loginButton.disabled = true;
     try {
-      const result = await api('/api/auth/login', {
+      const endpoint = getAllowRegistration() ? '/api/auth/register' : '/api/auth/login';
+      const result = await api(endpoint, {
         method: 'POST',
         body: JSON.stringify({ username, password })
       });
@@ -22,9 +23,16 @@ export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError }) {
         username: result.username || username,
         role: result.role || ''
       });
+      setAllowRegistration(false);
       void render();
     } catch (error) {
       const message = error instanceof Error ? error.message : '登录失败';
+      if (message.includes('系统已经完成初始化')) {
+        setAllowRegistration(false);
+      }
+      if (message.includes('系统尚未初始化')) {
+        setAllowRegistration(true);
+      }
       setAuthError(message);
       if (feedback) {
         feedback.hidden = false;
