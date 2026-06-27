@@ -5,7 +5,7 @@ import {
   listVisitorLogs,
   upsertBlacklistEntry
 } from '../../core/visitorRepository.js';
-import { normalizeIpAddress, sendJsonError } from '../http.js';
+import { isValidIpAddress, normalizeIpAddress, sendJsonError } from '../http.js';
 import type { ApiRouteContext } from './types.js';
 
 export function registerVisitorRoutes({ app, authService, visitorLogRetentionDays }: ApiRouteContext): void {
@@ -54,6 +54,14 @@ export function registerVisitorRoutes({ app, authService, visitorLogRetentionDay
         sendJsonError(res, new Error('请输入要拉黑的 IP 地址。'), 400);
         return;
       }
+      if (!isValidIpAddress(normalizedIpAddress)) {
+        sendJsonError(res, new Error('IP 地址格式不正确。'), 400);
+        return;
+      }
+      if (normalizedReason.length > 200) {
+        sendJsonError(res, new Error('拉黑原因长度不能超过 200 个字符。'), 400);
+        return;
+      }
 
       await upsertBlacklistEntry(normalizedIpAddress, normalizedReason);
       res.json({ ok: true });
@@ -67,6 +75,10 @@ export function registerVisitorRoutes({ app, authService, visitorLogRetentionDay
       const ipAddress = normalizeIpAddress(
         Array.isArray(req.params.ipAddress) ? req.params.ipAddress[0] : req.params.ipAddress
       );
+      if (!ipAddress || !isValidIpAddress(ipAddress)) {
+        sendJsonError(res, new Error('IP 地址格式不正确。'), 400);
+        return;
+      }
       await deleteBlacklistEntry(ipAddress);
       res.json({ ok: true });
     } catch (error) {

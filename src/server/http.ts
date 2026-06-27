@@ -1,3 +1,4 @@
+import net from 'node:net';
 import type express from 'express';
 
 export function normalizeIpAddress(value: string): string {
@@ -9,6 +10,10 @@ export function normalizeIpAddress(value: string): string {
     return trimmed.slice(7);
   }
   return trimmed;
+}
+
+export function isValidIpAddress(value: string): boolean {
+  return net.isIP(normalizeIpAddress(value)) !== 0;
 }
 
 export function sendJsonError(res: express.Response, error: unknown, status = 500): void {

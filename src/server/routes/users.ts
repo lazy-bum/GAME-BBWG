@@ -10,7 +10,7 @@ function isDuplicateUsernameError(error: unknown): boolean {
 function normalizeUserInput(body: { username?: string; password?: string }): { username: string; password: string } {
   return {
     username: body.username?.trim() ?? '',
-    password: body.password?.trim() ?? ''
+    password: typeof body.password === 'string' ? body.password : ''
   };
 }
 
@@ -23,6 +23,9 @@ function validateUserInput(username: string, password: string): string | null {
   }
   if (username.length > 64) {
     return '用户名长度不能超过 64 个字符。';
+  }
+  if (password.length > 256) {
+    return '密码长度不能超过 256 个字符。';
   }
   return null;
 }

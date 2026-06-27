@@ -3,27 +3,45 @@ import { enqueueVisitorLog, getCachedBlacklistEntry } from '../core/visitorRepos
 import type { AuthService } from './auth.js';
 import { normalizeIpAddress, sendJsonError } from './http.js';
 
+const REDACTED_VALUE = '[redacted]';
+const SENSITIVE_FIELD_PATTERN =
+  /(pass(word)?|token|secret|cookie|authorization|session|sign|api[-_]?key|password_hash)/i;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSensitiveFieldName(value: string): boolean {
+  return SENSITIVE_FIELD_PATTERN.test(value);
+}
+
+function sanitizeForLog(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForLog(item));
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, nestedValue]) => [
+        key,
+        isSensitiveFieldName(key) ? REDACTED_VALUE : sanitizeForLog(nestedValue)
+      ])
+    );
+  }
+
+  return value;
+}
+
 function getClientIp(req: express.Request): string {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor?.split(',')[0]?.trim();
-  const cloudflareIp = typeof req.headers['cf-connecting-ip'] === 'string' ? req.headers['cf-connecting-ip'] : '';
-  return normalizeIpAddress(cloudflareIp || forwardedIp || req.ip || '');
+  return normalizeIpAddress(req.ip || req.socket.remoteAddress || '');
 }
 
 function getRequestProtocol(req: express.Request): string {
-  const forwardedProto = req.headers['x-forwarded-proto'];
-  if (Array.isArray(forwardedProto)) {
-    return forwardedProto[0] || req.protocol;
-  }
-  return forwardedProto || req.protocol;
+  return req.protocol;
 }
 
 function getRequestHost(req: express.Request): string {
-  const forwardedHost = req.headers['x-forwarded-host'];
-  if (Array.isArray(forwardedHost)) {
-    return forwardedHost[0] || req.get('host') || '';
-  }
-  return forwardedHost || req.get('host') || '';
+  return req.get('host') || '';
 }
 
 function stringifyForLog(value: unknown, maxLength = 16_000): string {
@@ -32,7 +50,8 @@ function stringifyForLog(value: unknown, maxLength = 16_000): string {
   }
 
   try {
-    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    const sanitizedValue = sanitizeForLog(value);
+    const serialized = typeof sanitizedValue === 'string' ? sanitizedValue : JSON.stringify(sanitizedValue);
     return serialized.length > maxLength ? `${serialized.slice(0, maxLength)}...[truncated]` : serialized;
   } catch {
     return '[unserializable]';

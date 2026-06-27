@@ -9,6 +9,14 @@ export type SessionRecord = { username: string; role: UserRole; expiresAt: numbe
 const SESSION_COOKIE_NAME = 'bbwg_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12;
 
+function decodeCookieValue(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -28,7 +36,7 @@ function parseCookies(cookieHeader?: string): Record<string, string> {
 
     const key = trimmed.slice(0, separatorIndex).trim();
     const value = trimmed.slice(separatorIndex + 1).trim();
-    cookieMap[key] = decodeURIComponent(value);
+    cookieMap[key] = decodeCookieValue(value);
   }
 
   return cookieMap;
@@ -79,18 +87,20 @@ export class AuthService {
     return token;
   }
 
-  setSessionCookie(res: express.Response, token: string): void {
+  setSessionCookie(res: express.Response, token: string, options?: { secure?: boolean }): void {
     const maxAgeSeconds = Math.floor(SESSION_TTL_MS / 1000);
+    const secureFlag = options?.secure ? '; Secure' : '';
     res.setHeader(
       'Set-Cookie',
-      `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}`
+      `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureFlag}`
     );
   }
 
-  clearSessionCookie(res: express.Response): void {
+  clearSessionCookie(res: express.Response, options?: { secure?: boolean }): void {
+    const secureFlag = options?.secure ? '; Secure' : '';
     res.setHeader(
       'Set-Cookie',
-      `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`
+      `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureFlag}`
     );
   }
 

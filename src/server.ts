@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import crypto from 'node:crypto';
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,7 @@ import { createVisitorAuditMiddleware, createVisitorBlacklistMiddleware } from '
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+const fallbackSessionSecret = crypto.randomBytes(32).toString('hex');
 const redeemService = new RedeemService();
 const accountImportService = new AccountImportService();
 const accountBackupService = new AccountBackupService();
@@ -25,7 +27,7 @@ const redeemCodeSource = new ActiveRedeemCodeSource(process.argv.includes('--wec
 });
 
 const authService = new AuthService({
-  sessionSecret: process.env.SESSION_SECRET?.trim() || 'bbwg-dev-session-secret'
+  sessionSecret: process.env.SESSION_SECRET?.trim() || fallbackSessionSecret
 });
 
 const autoRedeemCoordinator = new AutoRedeemCoordinator({
@@ -34,7 +36,7 @@ const autoRedeemCoordinator = new AutoRedeemCoordinator({
   resumeSourcePolling: () => redeemCodeSource.resume()
 });
 
-app.set('trust proxy', true);
+app.set('trust proxy', resolveTrustProxySetting());
 app.use(express.json({ limit: '10mb' }));
 app.use(createVisitorAuditMiddleware(authService));
 app.use(createVisitorBlacklistMiddleware());
@@ -77,11 +79,41 @@ app.get('*', (_req, res) => {
 
 const port = Number(process.env.PORT || 3458);
 
+function resolveTrustProxySetting(): boolean | number | string[] {
+  const rawValue = process.env.TRUST_PROXY?.trim();
+  if (!rawValue) {
+    return false;
+  }
+
+  const lowerValue = rawValue.toLowerCase();
+  if (lowerValue === 'true') {
+    return true;
+  }
+  if (lowerValue === 'false') {
+    return false;
+  }
+
+  const numericValue = Number(rawValue);
+  if (Number.isInteger(numericValue) && numericValue >= 0) {
+    return numericValue;
+  }
+
+  return rawValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 void getDb()
   .then(async () => {
     await redeemCodeSource.initialize();
     redeemCodeSource.start(autoRedeemCoordinator);
     startVisitorLogCleanup();
+
+    if (!process.env.SESSION_SECRET?.trim()) {
+      // eslint-disable-next-line no-console
+      console.warn('SESSION_SECRET 未配置，当前进程已使用临时随机密钥。');
+    }
 
     app.listen(port, () => {
       // eslint-disable-next-line no-console

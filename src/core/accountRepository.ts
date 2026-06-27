@@ -557,7 +557,7 @@ export async function upsertAccountsFromBackup(
   );
 
   if (normalized.length === 0) {
-    return { inserted: 0, updated: 0, skipped: 0 };
+    return { inserted: 0, updated: 0, skipped: accounts.length };
   }
 
   const db = dbArg ?? (await getDb());

@@ -3,10 +3,14 @@ import { sendJsonError } from '../http.js';
 import { hashPassword } from '../userPassword.js';
 import type { ApiRouteContext } from './types.js';
 
+function shouldUseSecureCookie(req: { secure: boolean; get(name: string): string | undefined }): boolean {
+  return req.secure;
+}
+
 function normalizeAuthInput(body: { username?: string; password?: string }): { username: string; password: string } {
   return {
     username: body.username?.trim() ?? '',
-    password: body.password?.trim() ?? ''
+    password: typeof body.password === 'string' ? body.password : ''
   };
 }
 
@@ -19,6 +23,9 @@ function validateCredentials(username: string, password: string): string | null 
   }
   if (username.length > 64) {
     return '用户名长度不能超过 64 个字符。';
+  }
+  if (password.length > 256) {
+    return '密码长度不能超过 256 个字符。';
   }
   return null;
 }
@@ -59,7 +66,7 @@ export function registerAuthRoutes({ app, authService }: ApiRouteContext): void 
       }
 
       const token = authService.createSession(createdUser.username, createdUser.role);
-      authService.setSessionCookie(res, token);
+      authService.setSessionCookie(res, token, { secure: shouldUseSecureCookie(req) });
 
       res.json({
         ok: true,
@@ -93,7 +100,7 @@ export function registerAuthRoutes({ app, authService }: ApiRouteContext): void 
       }
 
       const token = authService.createSession(matchedUser.username, matchedUser.role);
-      authService.setSessionCookie(res, token);
+      authService.setSessionCookie(res, token, { secure: shouldUseSecureCookie(req) });
 
       res.json({
         ok: true,
@@ -107,7 +114,7 @@ export function registerAuthRoutes({ app, authService }: ApiRouteContext): void 
 
   app.post('/api/auth/logout', (req, res) => {
     authService.clearSessionFromRequest(req);
-    authService.clearSessionCookie(res);
+    authService.clearSessionCookie(res, { secure: shouldUseSecureCookie(req) });
     res.json({ ok: true });
   });
 }

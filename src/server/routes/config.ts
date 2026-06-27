@@ -4,11 +4,13 @@ import { sendJsonError } from '../http.js';
 import type { ApiRouteContext } from './types.js';
 
 export function registerConfigRoutes({ app, authService }: ApiRouteContext): void {
-  const requireAuth = authService.requireAuth;
   const requireRole = authService.requireRole.bind(authService);
 
-  app.get('/api/config/redeem', requireAuth, (_req, res) => {
-    res.json(getRedeemConfig());
+  app.get('/api/config/redeem', authService.requireAuth, (req, res) => {
+    const session = authService.getSessionFromRequest(req);
+    res.json({
+      redeemToken: session?.role === 'admin' ? getRedeemConfig().redeemToken : ''
+    });
   });
 
   app.post('/api/config/redeem-token', requireRole('admin'), (req, res) => {
