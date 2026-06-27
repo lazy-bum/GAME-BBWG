@@ -128,7 +128,7 @@ export function renderRedeemPage(shell, state) {
     state.redeemAccounts.length === 0
       ? '<div class="empty-state">当前没有可兑换账号。</div>'
       : `
-      <div class="table-wrap">
+      <div class="table-wrap redeem-account-table-wrap">
         <table>
           <thead>
             <tr>

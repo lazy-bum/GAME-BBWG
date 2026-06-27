@@ -70,6 +70,10 @@ button {
   margin: 0 auto;
 }
 
+.shell:not(.home-page) .frame {
+  width: min(1600px, 100%);
+}
+
 .topbar {
   display: flex;
   align-items: center;
@@ -1161,6 +1165,10 @@ button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
+.account-list-wrap table {
+  min-width: 1480px;
+}
+
 .visitor-log-wrap table {
   min-width: 1520px;
 }
@@ -1169,8 +1177,21 @@ button {
   min-width: 760px;
 }
 
+.group-list-wrap table {
+  min-width: 980px;
+}
+
 .user-table-wrap table {
-  min-width: 520px;
+  min-width: 920px;
+}
+
+.redeem-code-table-wrap table {
+  min-width: 1460px;
+}
+
+.redeem-code-failed-wrap table,
+.account-missing-redeem-wrap table {
+  min-width: 900px;
 }
 
 .blacklist-empty {
@@ -1479,6 +1500,10 @@ tbody tr:hover {
     padding: 16px;
   }
 
+  .shell:not(.home-page) .frame {
+    width: 100%;
+  }
+
   .page-head,
   .topbar,
   .topbar-actions {
@@ -1490,6 +1515,14 @@ tbody tr:hover {
     flex-direction: column;
   }
 
+  .page-head {
+    align-items: stretch;
+  }
+
+  .page-head > div:first-child {
+    min-width: 0;
+  }
+
   .list-toolbar {
     flex-direction: column;
   }
@@ -1497,6 +1530,23 @@ tbody tr:hover {
   .redeem-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .redeem-code-field {
+    width: 100%;
+  }
+
+  .redeem-target-group-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .redeem-target-group-toggle {
+    width: 100%;
+  }
+
+  .redeem-target-account-grid {
+    grid-template-columns: 1fr;
   }
 
   .visitor-toolbar {
@@ -1513,6 +1563,11 @@ tbody tr:hover {
   .group-create-panel {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .users-create-panel {
+    display: grid;
+    gap: 12px;
   }
 
   .group-tabs {
@@ -1542,7 +1597,7 @@ tbody tr:hover {
     max-width: none;
   }
 
-  .visitor-log-wrap {
+  .table-wrap.visitor-log-wrap {
     overflow: visible;
     border: 0;
     box-shadow: none;
@@ -1619,7 +1674,7 @@ tbody tr:hover {
     font-size: 11px;
   }
 
-  .blacklist-wrap {
+  .table-wrap.blacklist-wrap {
     overflow: visible;
     border: 0;
     box-shadow: none;
@@ -1688,6 +1743,194 @@ tbody tr:hover {
     min-width: 0;
   }
 
+  .table-wrap.group-list-wrap,
+  .table-wrap.user-table-wrap,
+  .table-wrap.redeem-summary-table,
+  .table-wrap.redeem-code-table-wrap,
+  .table-wrap.redeem-code-failed-wrap,
+  .table-wrap.account-missing-redeem-wrap,
+  .table-wrap.redeem-account-table-wrap {
+    overflow: visible;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .group-list-wrap table,
+  .group-list-wrap thead,
+  .group-list-wrap tbody,
+  .group-list-wrap tr,
+  .group-list-wrap th,
+  .group-list-wrap td,
+  .user-table-wrap table,
+  .user-table-wrap thead,
+  .user-table-wrap tbody,
+  .user-table-wrap tr,
+  .user-table-wrap th,
+  .user-table-wrap td,
+  .redeem-account-table-wrap table,
+  .redeem-account-table-wrap thead,
+  .redeem-account-table-wrap tbody,
+  .redeem-account-table-wrap tr,
+  .redeem-account-table-wrap th,
+  .redeem-account-table-wrap td,
+  .redeem-summary-table table,
+  .redeem-summary-table thead,
+  .redeem-summary-table tbody,
+  .redeem-summary-table tr,
+  .redeem-summary-table th,
+  .redeem-summary-table td,
+  .redeem-code-table-wrap table,
+  .redeem-code-table-wrap thead,
+  .redeem-code-table-wrap tbody,
+  .redeem-code-table-wrap tr,
+  .redeem-code-table-wrap th,
+  .redeem-code-table-wrap td,
+  .redeem-code-failed-wrap table,
+  .redeem-code-failed-wrap thead,
+  .redeem-code-failed-wrap tbody,
+  .redeem-code-failed-wrap tr,
+  .redeem-code-failed-wrap th,
+  .redeem-code-failed-wrap td,
+  .account-missing-redeem-wrap table,
+  .account-missing-redeem-wrap thead,
+  .account-missing-redeem-wrap tbody,
+  .account-missing-redeem-wrap tr,
+  .account-missing-redeem-wrap th,
+  .account-missing-redeem-wrap td {
+    display: block;
+    width: 100%;
+  }
+
+  .group-list-wrap table,
+  .user-table-wrap table,
+  .redeem-account-table-wrap table,
+  .redeem-summary-table table,
+  .redeem-code-table-wrap table,
+  .redeem-code-failed-wrap table,
+  .account-missing-redeem-wrap table {
+    min-width: 0;
+  }
+
+  .group-list-wrap thead,
+  .user-table-wrap thead,
+  .redeem-account-table-wrap thead,
+  .redeem-summary-table thead,
+  .redeem-code-table-wrap thead,
+  .redeem-code-failed-wrap thead,
+  .account-missing-redeem-wrap thead {
+    display: none;
+  }
+
+  .group-list-wrap tbody,
+  .user-table-wrap tbody,
+  .redeem-account-table-wrap tbody,
+  .redeem-summary-table tbody,
+  .redeem-code-table-wrap tbody,
+  .redeem-code-failed-wrap tbody,
+  .account-missing-redeem-wrap tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .group-list-wrap tr,
+  .user-table-wrap tr,
+  .redeem-account-table-wrap tr,
+  .redeem-summary-table tr,
+  .redeem-code-table-wrap tr,
+  .redeem-code-failed-wrap tr,
+  .account-missing-redeem-wrap tr {
+    border-radius: 18px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(20, 33, 61, 0.08);
+    box-shadow: 0 10px 24px rgba(20, 33, 61, 0.08);
+  }
+
+  .group-list-wrap td,
+  .user-table-wrap td,
+  .redeem-account-table-wrap td,
+  .redeem-summary-table td,
+  .redeem-code-table-wrap td,
+  .redeem-code-failed-wrap td,
+  .account-missing-redeem-wrap td {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 0;
+    font-size: 12px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    border-bottom: 1px solid rgba(20, 33, 61, 0.06);
+  }
+
+  .redeem-code-table-wrap td,
+  .account-missing-redeem-wrap td {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+
+  .group-list-wrap td:last-child,
+  .user-table-wrap td:last-child,
+  .redeem-account-table-wrap td:last-child,
+  .redeem-summary-table td:last-child,
+  .redeem-code-table-wrap td:last-child,
+  .redeem-code-failed-wrap td:last-child,
+  .account-missing-redeem-wrap td:last-child {
+    border-bottom: 0;
+  }
+
+  .group-list-wrap td::before,
+  .user-table-wrap td::before,
+  .redeem-account-table-wrap td::before,
+  .redeem-summary-table td::before,
+  .redeem-code-table-wrap td::before,
+  .redeem-code-failed-wrap td::before,
+  .account-missing-redeem-wrap td::before {
+    content: attr(data-label);
+    color: #526079;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  .group-list-wrap .search-input,
+  .redeem-code-table-wrap .secondary-button,
+  .redeem-code-table-wrap .danger-button,
+  .redeem-code-failed-wrap .secondary-button,
+  .account-missing-redeem-wrap .primary-button,
+  .account-missing-redeem-wrap .secondary-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .group-list-wrap .table-actions,
+  .redeem-code-table-wrap .table-actions {
+    width: 100%;
+    display: grid;
+    gap: 8px;
+  }
+
+  .group-list-wrap .table-actions .secondary-button,
+  .group-list-wrap .table-actions .danger-button,
+  .redeem-code-table-wrap .table-actions .secondary-button,
+  .redeem-code-table-wrap .table-actions .danger-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .redeem-summary-table td:first-child,
+  .redeem-code-table-wrap .redeem-code-main-cell strong,
+  .redeem-code-failed-wrap td,
+  .account-missing-redeem-wrap td {
+    word-break: break-word;
+  }
+
+  .redeem-summary-table .failed-account-copy {
+    width: 100%;
+  }
+
   .list-page-head {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1714,7 +1957,7 @@ tbody tr:hover {
     min-width: 0;
   }
 
-  .account-list-wrap {
+  .table-wrap.account-list-wrap {
     overflow: visible;
     border: 0;
     box-shadow: none;

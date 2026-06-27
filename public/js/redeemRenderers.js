@@ -25,12 +25,12 @@ export function renderRedeemSummaryRows(summaries) {
     .map(
       (item) => `
         <tr>
-          <td>${escapeHtml(item.giftCode)}</td>
-          <td>${item.summary?.total ?? 0}</td>
-          <td>${item.summary?.successCount ?? 0}</td>
-          <td>${item.summary?.receivedCount ?? 0}</td>
-          <td>${item.summary?.failureCount ?? 0}</td>
-          <td>${renderFailedAccountCell(item.giftCode, item.summary?.failedAccountIds)}</td>
+          <td data-label="兑换码">${escapeHtml(item.giftCode)}</td>
+          <td data-label="总数">${item.summary?.total ?? 0}</td>
+          <td data-label="成功">${item.summary?.successCount ?? 0}</td>
+          <td data-label="已领取">${item.summary?.receivedCount ?? 0}</td>
+          <td data-label="失败">${item.summary?.failureCount ?? 0}</td>
+          <td data-label="失败记录">${renderFailedAccountCell(item.giftCode, item.summary?.failedAccountIds)}</td>
         </tr>
       `
     )
