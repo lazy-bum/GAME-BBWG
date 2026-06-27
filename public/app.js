@@ -78,10 +78,12 @@ let accountGroupFilter = 'ungrouped';
 let visitorLogs = [];
 let visitorLogRetentionDays = 30;
 let visitorBlacklist = [];
-let visitorLogLimit = 100;
 let visitorBlockTargetIp = '';
 let visitorPathFilter = '';
-let visitorVisibleCount = 10;
+let visitorLogOffset = 0;
+let visitorLogsHasMore = true;
+let visitorLogsLoadingMore = false;
+let visitorLogRequestVersion = 0;
 let redeemCodeItems = [];
 let redeemCodeFailedAccountsModal = null;
 let systemUsers = [];
@@ -109,6 +111,10 @@ function getRedeemStatusView(account) {
 
 function isAdminUser() {
   return authRole === 'admin';
+}
+
+function getNormalizedVisitorPathFilter() {
+  return visitorPathFilter.trim();
 }
 
 function ensureEventSource() {
@@ -291,8 +297,6 @@ function navigate(route) {
   currentRoute = route;
   if (route !== 'visitors') {
     disconnectVisitorLogObserver();
-  } else {
-    visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
   }
   if (route !== 'list') {
     accountBlacklistModalOpen = false;
@@ -387,10 +391,96 @@ function disconnectVisitorLogObserver() {
   }
 }
 
+async function fetchVisitorBlacklist() {
+  visitorBlacklist = (await api('/api/visitor-blacklist')) || [];
+}
+
+async function fetchVisitorLogsPage({ reset = false, renderWhileLoading = false } = {}) {
+  if (!reset && (visitorLogsLoadingMore || !visitorLogsHasMore)) {
+    return false;
+  }
+
+  const normalizedPathFilter = getNormalizedVisitorPathFilter();
+  const startOffset = reset ? 0 : visitorLogOffset;
+  const params = new URLSearchParams({
+    limit: String(VISITOR_LOG_BATCH_SIZE),
+    offset: String(startOffset)
+  });
+  if (normalizedPathFilter) {
+    params.set('path', normalizedPathFilter);
+  }
+
+  const requestVersion = ++visitorLogRequestVersion;
+  visitorLogsLoadingMore = true;
+  if (renderWhileLoading && currentRoute === 'visitors') {
+    await render({ refreshData: false });
+    if (requestVersion !== visitorLogRequestVersion) {
+      return false;
+    }
+  }
+
+  try {
+    const logResult = await api(`/api/visitor-logs?${params.toString()}`);
+    if (requestVersion !== visitorLogRequestVersion) {
+      return false;
+    }
+
+    const items = Array.isArray(logResult?.items) ? logResult.items : [];
+    const retentionDays = Number(logResult?.retentionDays);
+    visitorLogs = reset ? items : [...visitorLogs, ...items];
+    visitorLogRetentionDays = Number.isFinite(retentionDays) ? retentionDays : 0;
+    visitorLogOffset = startOffset + items.length;
+    visitorLogsHasMore = Boolean(logResult?.hasMore);
+    visitorsDataLoaded = true;
+    return true;
+  } finally {
+    if (requestVersion === visitorLogRequestVersion) {
+      visitorLogsLoadingMore = false;
+    }
+  }
+}
+
+async function reloadVisitorLogs({ refreshBlacklist = false } = {}) {
+  if (currentRoute !== 'visitors' || !isAdminUser()) {
+    return;
+  }
+
+  disconnectVisitorLogObserver();
+  try {
+    if (refreshBlacklist) {
+      await Promise.all([fetchVisitorLogsPage({ reset: true, renderWhileLoading: true }), fetchVisitorBlacklist()]);
+    } else {
+      await fetchVisitorLogsPage({ reset: true, renderWhileLoading: true });
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : '加载访问记录失败');
+  } finally {
+    if (currentRoute === 'visitors') {
+      await render({ refreshData: false });
+    }
+  }
+}
+
+async function loadMoreVisitorLogs() {
+  if (currentRoute !== 'visitors' || !isAdminUser()) {
+    return;
+  }
+
+  try {
+    await fetchVisitorLogsPage({ renderWhileLoading: true });
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : '加载更多访问记录失败');
+  } finally {
+    if (currentRoute === 'visitors') {
+      await render({ refreshData: false });
+    }
+  }
+}
+
 function setupVisitorLogObserver() {
   disconnectVisitorLogObserver();
 
-  if (currentRoute !== 'visitors') {
+  if (currentRoute !== 'visitors' || visitorLogsLoadingMore || !visitorLogsHasMore) {
     return;
   }
 
@@ -406,9 +496,8 @@ function setupVisitorLogObserver() {
         return;
       }
 
-      visitorVisibleCount += VISITOR_LOG_BATCH_SIZE;
       disconnectVisitorLogObserver();
-      void render();
+      void loadMoreVisitorLogs();
     },
     {
       root: null,
@@ -463,16 +552,8 @@ async function render({ refreshData = true } = {}) {
     redeemAccountsLoaded = true;
   }
 
-  if (currentRoute === 'visitors' && isAdminUser() && refreshData) {
-    const [logResult, blacklistResult] = await Promise.all([
-      api(`/api/visitor-logs?limit=${visitorLogLimit}`),
-      api('/api/visitor-blacklist')
-    ]);
-    visitorLogs = logResult.items || [];
-    visitorLogRetentionDays = logResult.retentionDays || 30;
-    visitorBlacklist = blacklistResult || [];
-    visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
-    visitorsDataLoaded = true;
+  if (currentRoute === 'visitors' && isAdminUser() && refreshData && !visitorsDataLoaded) {
+    await Promise.all([fetchVisitorLogsPage({ reset: true }), fetchVisitorBlacklist()]);
   }
 
   if (currentRoute === 'redeem-codes' && isAdminUser() && refreshData) {
@@ -527,10 +608,10 @@ async function render({ refreshData = true } = {}) {
       visitorLogs,
       visitorLogRetentionDays,
       visitorBlacklist,
-      visitorLogLimit,
       visitorBlockTargetIp,
       visitorPathFilter,
-      visitorVisibleCount
+      visitorLogsHasMore,
+      visitorLogsLoadingMore
     });
   } else {
     app.innerHTML = renderRedeemView(shell, {
@@ -622,7 +703,10 @@ function bindEvents() {
       visitorLogs = [];
       visitorBlacklist = [];
       visitorPathFilter = '';
-      visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
+      visitorLogOffset = 0;
+      visitorLogsHasMore = true;
+      visitorLogsLoadingMore = false;
+      visitorLogRequestVersion = 0;
       redeemCodeItems = [];
       redeemCodeFailedAccountsModal = null;
       systemUsers = [];
@@ -667,6 +751,7 @@ function bindEvents() {
     api,
     render,
     renderLocal: () => render({ refreshData: false }),
+    reloadVisitorLogs,
     getVisitorBlockTargetIp: () => visitorBlockTargetIp,
     setVisitorBlockTargetIp: (value) => {
       visitorBlockTargetIp = value;
@@ -674,11 +759,11 @@ function bindEvents() {
     setVisitorPathFilter: (value) => {
       visitorPathFilter = value;
     },
-    resetVisitorVisibleCount: () => {
-      visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
-    },
     clearVisitorLogs: () => {
       visitorLogs = [];
+      visitorLogOffset = 0;
+      visitorLogsHasMore = false;
+      visitorLogsLoadingMore = false;
     },
     disconnectVisitorLogObserver
   });

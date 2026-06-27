@@ -202,7 +202,6 @@ export function renderRedeemAccountRow(account, statusView, options = {}) {
       <td data-label="头像">${avatarContent}</td>
       <td data-label="名字">${escapeHtml(gameName)}</td>
       <td data-label="分组">${renderAccountGroupBadge(account)}</td>
-      <td data-label="审计">${escapeHtml(account.updatedBy || account.createdBy || 'system')}</td>
       <td data-label="兑换状态">
         <span class="status-badge status-${statusView.code}" data-redeem-status="${escapeAttribute(account.accountId)}">${escapeHtml(statusView.text)}</span>
       </td>

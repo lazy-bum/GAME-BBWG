@@ -4,14 +4,16 @@ export function bindVisitorEvents({
   api,
   render,
   renderLocal,
+  reloadVisitorLogs,
   getVisitorBlockTargetIp,
   setVisitorBlockTargetIp,
   setVisitorPathFilter,
-  resetVisitorVisibleCount,
   clearVisitorLogs,
   disconnectVisitorLogObserver
 }) {
-  document.querySelector('#refresh-visitor-logs')?.addEventListener('click', () => void render());
+  document.querySelector('#refresh-visitor-logs')?.addEventListener('click', () => {
+    void reloadVisitorLogs({ refreshBlacklist: true });
+  });
 
   const clearVisitorLogsButton = document.querySelector('#clear-visitor-logs');
   clearVisitorLogsButton?.addEventListener('click', async () => {
@@ -23,7 +25,6 @@ export function bindVisitorEvents({
     try {
       await api('/api/visitor-logs', { method: 'DELETE' });
       clearVisitorLogs();
-      resetVisitorVisibleCount();
       disconnectVisitorLogObserver();
       void render();
     } catch (error) {
@@ -35,20 +36,21 @@ export function bindVisitorEvents({
   const visitorPathFilterInput = document.querySelector('#visitor-path-filter');
   visitorPathFilterInput?.addEventListener('input', () => {
     setVisitorPathFilter(visitorPathFilterInput.value ?? '');
-    resetVisitorVisibleCount();
     if (visitorFilterRenderTimer) {
       clearTimeout(visitorFilterRenderTimer);
     }
     visitorFilterRenderTimer = setTimeout(() => {
       visitorFilterRenderTimer = null;
-      void renderLocal();
+      void reloadVisitorLogs();
     }, 150);
   });
 
   document.querySelector('#clear-visitor-path-filter')?.addEventListener('click', () => {
     setVisitorPathFilter('');
-    resetVisitorVisibleCount();
-    void renderLocal();
+    if (visitorPathFilterInput) {
+      visitorPathFilterInput.value = '';
+    }
+    void reloadVisitorLogs();
   });
 
   const addBlacklistEntryButton = document.querySelector('#add-blacklist-entry');

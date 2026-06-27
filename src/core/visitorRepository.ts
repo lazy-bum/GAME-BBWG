@@ -9,6 +9,10 @@ let visitorLogQueue: VisitorLogInput[] = [];
 let visitorLogFlushTimer: NodeJS.Timeout | null = null;
 let visitorLogFlushPromise: Promise<void> | null = null;
 
+function escapeLikePattern(value: string): string {
+  return value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+}
+
 export async function createVisitorLog(input: VisitorLogInput): Promise<void> {
   const db = await getDb();
   await db.run(
@@ -189,8 +193,30 @@ export async function deleteAllVisitorLogs(): Promise<number> {
   return result.changes ?? 0;
 }
 
-export async function listVisitorLogs(limit = 100): Promise<VisitorLogRow[]> {
+export async function listVisitorLogs(options?: { limit?: number; offset?: number; pathFilter?: string }): Promise<VisitorLogRow[]> {
   const db = await getDb();
+  const limit = options?.limit;
+  const offset = options?.offset;
+  const pathFilter = options?.pathFilter?.trim() ?? '';
+  const hasLimit = Number.isFinite(limit) && (limit ?? 0) > 0;
+  const hasOffset = Number.isFinite(offset) && (offset ?? 0) >= 0;
+  const hasPathFilter = pathFilter.length > 0;
+  const params: Array<string | number> = [];
+  let query = 'SELECT * FROM visitor_logs';
+
+  if (hasPathFilter) {
+    query += ' WHERE path LIKE ? ESCAPE \'\\\\\' COLLATE NOCASE';
+    params.push(`%${escapeLikePattern(pathFilter)}%`);
+  }
+
+  query += ' ORDER BY id DESC';
+  if (hasLimit) {
+    query += ` LIMIT ?${hasOffset ? ' OFFSET ?' : ''}`;
+    params.push(Math.trunc(limit ?? 0));
+    if (hasOffset) {
+      params.push(Math.trunc(offset ?? 0));
+    }
+  }
   const rows = await db.all<
     {
       id: number;
@@ -215,7 +241,7 @@ export async function listVisitorLogs(limit = 100): Promise<VisitorLogRow[]> {
       block_reason: string;
       created_at: number;
     }[]
-  >('SELECT * FROM visitor_logs ORDER BY id DESC LIMIT ?', limit);
+  >(query, ...params);
 
   return rows.map((row) => ({
     id: row.id,

@@ -16,12 +16,27 @@ export function registerVisitorRoutes({ app, authService, visitorLogRetentionDay
   app.get('/api/visitor-logs', requireRole('admin'), async (req, res) => {
     try {
       const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+      const rawOffset = Array.isArray(req.query.offset) ? req.query.offset[0] : req.query.offset;
+      const rawPath = Array.isArray(req.query.path) ? req.query.path[0] : req.query.path;
       const parsedLimit = Number(rawLimit);
-      const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 200)) : 100;
-      const rows = await listVisitorLogs(limit);
+      const parsedOffset = Number(rawOffset);
+      const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.trunc(parsedLimit) : undefined;
+      const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? Math.trunc(parsedOffset) : 0;
+      const pathFilter = typeof rawPath === 'string' ? rawPath.trim() : '';
+      const rows = await listVisitorLogs({
+        limit: limit ? limit + 1 : undefined,
+        offset,
+        pathFilter
+      });
+      const hasMore = Boolean(limit && rows.length > limit);
+      const items = hasMore && limit ? rows.slice(0, limit) : rows;
       res.json({
         retentionDays: visitorLogRetentionDays,
-        items: rows
+        items,
+        offset,
+        limit: limit ?? items.length,
+        hasMore,
+        pathFilter
       });
     } catch (error) {
       sendJsonError(res, error);

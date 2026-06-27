@@ -3,11 +3,8 @@ import { escapeAttribute, escapeHtml } from '../html.js';
 import { renderVisitorBlacklistRow, renderVisitorLogRow } from '../visitorViews.js';
 
 export function renderVisitorPage(shell, state) {
-  const filteredVisitorLogs = state.visitorLogs.filter((item) =>
-    state.visitorPathFilter.trim() === '' ? true : (item.path || '').toLowerCase().includes(state.visitorPathFilter.trim().toLowerCase())
-  );
-  const visibleVisitorLogs = filteredVisitorLogs.slice(0, state.visitorVisibleCount);
-  const hasMoreVisitorLogs = visibleVisitorLogs.length < filteredVisitorLogs.length;
+  const normalizedPathFilter = state.visitorPathFilter.trim();
+  const hasPathFilter = normalizedPathFilter !== '';
   const blockModal = `
     <div class="visitor-modal-backdrop" id="visitor-block-modal" ${state.visitorBlockTargetIp ? '' : 'hidden'}>
       <div class="visitor-modal" role="dialog" aria-modal="true" aria-labelledby="visitor-block-title">
@@ -32,9 +29,7 @@ export function renderVisitorPage(shell, state) {
   `;
   const logRows =
     state.visitorLogs.length === 0
-      ? '<div class="empty-state">最近还没有访问记录。</div>'
-      : filteredVisitorLogs.length === 0
-        ? '<div class="empty-state">没有匹配到对应路径的访问记录。</div>'
+      ? `<div class="empty-state">${hasPathFilter ? '没有匹配到对应路径的访问记录。' : '最近还没有访问记录。'}</div>`
       : `
       <div class="table-wrap visitor-log-wrap">
         <table>
@@ -53,13 +48,15 @@ export function renderVisitorPage(shell, state) {
               <th>操作</th>
             </tr>
           </thead>
-          <tbody>${visibleVisitorLogs.map((item) => renderVisitorLogRow(item, state.visitorBlacklist)).join('')}</tbody>
+          <tbody>${state.visitorLogs.map((item) => renderVisitorLogRow(item, state.visitorBlacklist)).join('')}</tbody>
         </table>
       </div>
       ${
-        hasMoreVisitorLogs
-          ? `<div class="visitor-load-more" id="visitor-log-load-more">继续下滑加载更多记录</div>`
-          : `<div class="visitor-load-more visitor-load-more-end">已显示全部 ${filteredVisitorLogs.length} 条记录</div>`
+        state.visitorLogsLoadingMore
+          ? '<div class="visitor-load-more visitor-load-more-loading">正在加载更多记录...</div>'
+          : state.visitorLogsHasMore
+            ? `<div class="visitor-load-more" id="visitor-log-load-more">继续下滑加载更多记录</div>`
+            : `<div class="visitor-load-more visitor-load-more-end">已显示当前筛选下的全部 ${state.visitorLogs.length} 条记录</div>`
       }
     `;
   const blacklistRows =
@@ -84,7 +81,7 @@ export function renderVisitorPage(shell, state) {
   return shell(`
     <section class="page-head">
       <div>
-        <p class="lead">当前拉取最近 ${state.visitorLogLimit} 条访问记录，每次展示 ${VISITOR_LOG_BATCH_SIZE} 条，下滑自动继续加载。数据库会自动只保留最近 ${state.visitorLogRetentionDays} 天。</p>
+        <p class="lead">访问记录按页加载，每次请求 ${VISITOR_LOG_BATCH_SIZE} 条，下滑自动继续加载。访问日志不会自动清理，请按需手动清空。</p>
       </div>
       <div class="page-actions">
         <button class="secondary-button" id="refresh-visitor-logs">刷新访问记录</button>
