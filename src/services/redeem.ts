@@ -272,7 +272,7 @@ export class RedeemService extends EventEmitter {
     return mergedSummary;
   }
 
-  async runMultiCodeRedeem(giftCodes: string[]): Promise<MultiRedeemSummary> {
+  async runMultiCodeRedeem(giftCodes: string[], targetAccountIds?: string[]): Promise<MultiRedeemSummary> {
     if (this.running) {
       throw new Error('当前已有兑换任务正在执行，请稍后再试。');
     }
@@ -288,6 +288,11 @@ export class RedeemService extends EventEmitter {
     if (normalizedCodes.length === 0) {
       throw new Error('请输入兑换码');
     }
+
+    const normalizedTargetAccountIds =
+      targetAccountIds && targetAccountIds.length > 0
+        ? Array.from(new Set(targetAccountIds.map((accountId) => accountId.trim()).filter(Boolean)))
+        : undefined;
 
     this.running = true;
     this.cancelRequested = false;
@@ -305,8 +310,8 @@ export class RedeemService extends EventEmitter {
         this.log('info', `===== 开始兑换 ${giftCode}，${index + 1} / ${normalizedCodes.length} =====`);
         const summary = await this.executeBatchRedeemWithSingleFailureRetry(
           giftCode,
-          undefined,
-          { includeAllAccounts: true },
+          normalizedTargetAccountIds,
+          normalizedTargetAccountIds && normalizedTargetAccountIds.length > 0 ? { includeTargetAccounts: true } : { includeAllAccounts: true },
           progressContext
         );
         summaries.push({ giftCode, summary });

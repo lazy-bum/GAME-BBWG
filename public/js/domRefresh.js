@@ -17,9 +17,14 @@ export function refreshRedeemDom(state) {
   const forceCompleteRedeemButton = document.querySelector('#force-complete-redeem');
   const fetchRedeemTokenButton = document.querySelector('#fetch-redeem-token');
   const saveRedeemTokenButton = document.querySelector('#save-redeem-token');
+  const redeemTargetModeSelect = document.querySelector('#redeem-target-mode');
+  const redeemSelectVisibleButton = document.querySelector('#redeem-select-visible');
+  const redeemClearSelectedAccountsButton = document.querySelector('#redeem-clear-selected-accounts');
+  const redeemTargetSummary = document.querySelector('.redeem-target-summary');
   const redeemCodeInput = document.querySelector('#redeem-code');
   const redeemTokenInput = document.querySelector('#redeem-token');
   const parsedRedeemCodes = parseRedeemCodeInput(state.redeemCode);
+  const targetAccountIdSet = new Set(state.redeemTargetAccountIds || []);
 
   if (progressBar) {
     progressBar.style.width = `${progressPercent}%`;
@@ -77,6 +82,23 @@ export function refreshRedeemDom(state) {
   if (saveRedeemTokenButton) {
     saveRedeemTokenButton.disabled = state.redeemIsRunning;
   }
+  if (redeemTargetModeSelect) {
+    redeemTargetModeSelect.disabled = state.redeemIsRunning;
+    if (redeemTargetModeSelect.value !== state.redeemTargetMode) {
+      redeemTargetModeSelect.value = state.redeemTargetMode;
+    }
+  }
+  if (redeemSelectVisibleButton) {
+    redeemSelectVisibleButton.disabled = state.redeemIsRunning || state.redeemAccounts.length === 0;
+  }
+  if (redeemClearSelectedAccountsButton) {
+    redeemClearSelectedAccountsButton.disabled = state.redeemIsRunning || targetAccountIdSet.size === 0;
+  }
+  if (redeemTargetSummary) {
+    const selectedCount = state.redeemAccounts.filter((account) => targetAccountIdSet.has(account.accountId)).length;
+    redeemTargetSummary.textContent =
+      state.redeemTargetMode === 'custom' ? `当前将兑换选中的 ${selectedCount} 个账号` : `当前将兑换全部 ${state.redeemAccounts.length} 个账号`;
+  }
   if (redeemCodeInput) {
     redeemCodeInput.disabled = state.redeemIsRunning;
     if (redeemCodeInput.value !== state.redeemCode) {
@@ -96,6 +118,40 @@ export function refreshRedeemDom(state) {
 
     badge.className = `status-badge status-${statusView.code}`;
     badge.textContent = statusView.text;
+  });
+
+  document.querySelectorAll('[data-select-redeem-account]').forEach((checkbox) => {
+    const accountId = checkbox.dataset.selectRedeemAccount ?? '';
+    checkbox.checked = targetAccountIdSet.has(accountId);
+    checkbox.disabled = state.redeemIsRunning;
+  });
+
+  document.querySelectorAll('[data-select-redeem-group]').forEach((checkbox) => {
+    const groupId = checkbox.dataset.selectRedeemGroup ?? '';
+    const groupAccountIds = state.redeemAccounts
+      .filter((account) => (account.groupId || '__ungrouped__') === groupId)
+      .map((account) => account.accountId);
+    const selectedCount = groupAccountIds.filter((accountId) => targetAccountIdSet.has(accountId)).length;
+    checkbox.checked = groupAccountIds.length > 0 && selectedCount === groupAccountIds.length;
+    checkbox.indeterminate = selectedCount > 0 && selectedCount < groupAccountIds.length;
+    checkbox.disabled = state.redeemIsRunning;
+  });
+
+  const collapsedGroupIdSet = new Set(state.redeemCollapsedGroupIds || []);
+  document.querySelectorAll('[data-toggle-redeem-group]').forEach((button) => {
+    const groupId = button.dataset.toggleRedeemGroup ?? '';
+    const isCollapsed = collapsedGroupIdSet.has(groupId);
+    button.textContent = isCollapsed ? '展开' : '折叠';
+    button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+    button.disabled = state.redeemIsRunning;
+    const card = button.closest('.redeem-target-group-card');
+    const grid = card?.querySelector('.redeem-target-account-grid');
+    if (card) {
+      card.classList.toggle('is-collapsed', isCollapsed);
+    }
+    if (grid) {
+      grid.hidden = isCollapsed;
+    }
   });
 }
 

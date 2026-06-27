@@ -2,6 +2,7 @@ import { renderRedeemAccountRow } from '../accountViews.js';
 import { escapeAttribute, escapeHtml } from '../html.js';
 import { parseRedeemCodeInput } from '../redeemCodes.js';
 import { renderRedeemLogs, renderRedeemSummaryTable } from '../redeemRenderers.js';
+import { REDEEM_TARGET_MODE, groupRedeemAccounts } from '../redeemTargets.js';
 
 export function renderRedeemPage(shell, state) {
   const progressPercent = state.redeemTotal > 0 ? Math.round((state.redeemProcessed / state.redeemTotal) * 100) : 0;
@@ -9,6 +10,13 @@ export function renderRedeemPage(shell, state) {
   const startRedeemText = state.redeemIsRunning ? '处理中...' : parsedRedeemCodes.codes.length > 1 ? '开始批量兑换' : '开始兑换';
   const retryableCodeFailureCount = Array.isArray(state.retryableCodeFailures) ? state.retryableCodeFailures.length : 0;
   const retryDisabled = state.redeemIsRunning || retryableCodeFailureCount === 0;
+  const targetAccountIdSet = new Set(state.redeemTargetAccountIds);
+  const collapsedGroupIdSet = new Set(state.redeemCollapsedGroupIds);
+  const targetMode = state.redeemTargetMode || REDEEM_TARGET_MODE.all;
+  const targetedAccounts = targetMode === REDEEM_TARGET_MODE.all ? state.redeemAccounts : state.redeemAccounts.filter((account) => targetAccountIdSet.has(account.accountId));
+  const groupedAccounts = groupRedeemAccounts(state.redeemAccounts, state.accountGroups);
+  const targetSummaryText =
+    targetMode === REDEEM_TARGET_MODE.custom ? `当前将兑换选中的 ${targetedAccounts.length} 个账号` : `当前将兑换全部 ${state.redeemAccounts.length} 个账号`;
   const codeProgress =
     state.redeemCodeTotal > 1
       ? `<div class="redeem-progress-text redeem-code-progress-text">兑换码 ${state.redeemCodeProcessed} / ${state.redeemCodeTotal}${state.redeemCurrentCode ? `，当前码：${escapeHtml(state.redeemCurrentCode)}` : ''}</div>`
@@ -29,6 +37,91 @@ export function renderRedeemPage(shell, state) {
         <button class="secondary-button toolbar-button" id="retry-failed-redeem" ${retryDisabled ? 'disabled' : ''}>重试兑换码失败记录</button>
         <button class="secondary-button toolbar-button" id="force-complete-redeem" ${state.redeemIsRunning ? 'disabled' : ''}>强制全部设为已兑换</button>
       </div>
+      <div class="redeem-target-panel">
+        <div class="redeem-target-toolbar">
+          <label class="batch-check-label">
+            <span>兑换范围</span>
+            <select id="redeem-target-mode" class="search-input batch-group-select" ${state.redeemIsRunning ? 'disabled' : ''}>
+              <option value="${REDEEM_TARGET_MODE.all}" ${targetMode === REDEEM_TARGET_MODE.all ? 'selected' : ''}>全部账号</option>
+              <option value="${REDEEM_TARGET_MODE.custom}" ${targetMode === REDEEM_TARGET_MODE.custom ? 'selected' : ''}>按分组/用户自定义</option>
+            </select>
+          </label>
+          ${
+            targetMode === REDEEM_TARGET_MODE.custom
+              ? `
+                <button class="secondary-button toolbar-button" id="redeem-select-visible" ${state.redeemIsRunning || state.redeemAccounts.length === 0 ? 'disabled' : ''}>
+                  ${state.redeemVisibleAccountIds.every((accountId) => targetAccountIdSet.has(accountId)) && state.redeemVisibleAccountIds.length > 0 ? '取消当前显示' : '选择当前显示'}
+                </button>
+                <button class="secondary-button toolbar-button" id="redeem-clear-selected-accounts" ${state.redeemIsRunning || targetAccountIdSet.size === 0 ? 'disabled' : ''}>清空已选</button>
+              `
+              : ''
+          }
+        </div>
+        <div class="redeem-target-summary">${escapeHtml(targetSummaryText)}</div>
+        ${
+          targetMode === REDEEM_TARGET_MODE.custom
+            ? `
+              <div class="redeem-target-groups">
+                ${groupedAccounts
+                  .map((group) => {
+                    const groupAccountIds = group.accounts.map((account) => account.accountId);
+                    const selectedCount = groupAccountIds.filter((accountId) => targetAccountIdSet.has(accountId)).length;
+                    const allSelected = groupAccountIds.length > 0 && selectedCount === groupAccountIds.length;
+                    const partiallySelected = selectedCount > 0 && selectedCount < groupAccountIds.length;
+                    const isCollapsed = collapsedGroupIdSet.has(group.groupId);
+
+                    return `
+                      <section class="redeem-target-group-card ${isCollapsed ? 'is-collapsed' : ''}">
+                        <div class="redeem-target-group-head">
+                          <label class="batch-check-label redeem-target-group-select">
+                            <input
+                              type="checkbox"
+                              data-select-redeem-group="${escapeAttribute(group.groupId)}"
+                              ${allSelected ? 'checked' : ''}
+                              ${partiallySelected ? 'data-indeterminate="true"' : ''}
+                              ${state.redeemIsRunning ? 'disabled' : ''}
+                            />
+                            <span class="redeem-target-group-name">${escapeHtml(group.groupName)}</span>
+                            <strong>${selectedCount}/${group.accounts.length}</strong>
+                          </label>
+                          <button
+                            type="button"
+                            class="secondary-button redeem-target-group-toggle"
+                            data-toggle-redeem-group="${escapeAttribute(group.groupId)}"
+                            aria-expanded="${isCollapsed ? 'false' : 'true'}"
+                            ${state.redeemIsRunning ? 'disabled' : ''}
+                          >
+                            ${isCollapsed ? '展开' : '折叠'}
+                          </button>
+                        </div>
+                        <div class="redeem-target-account-grid" ${isCollapsed ? 'hidden' : ''}>
+                          ${group.accounts
+                            .map((account) => {
+                              const gameName = account.name?.trim() || account.accountId;
+                              return `
+                                <label class="redeem-target-account-chip ${targetAccountIdSet.has(account.accountId) ? 'is-selected' : ''}">
+                                  <input
+                                    type="checkbox"
+                                    data-select-redeem-account="${escapeAttribute(account.accountId)}"
+                                    ${targetAccountIdSet.has(account.accountId) ? 'checked' : ''}
+                                    ${state.redeemIsRunning ? 'disabled' : ''}
+                                  />
+                                  <span>${escapeHtml(gameName)}</span>
+                                  <code>${escapeHtml(account.accountId)}</code>
+                                </label>
+                              `;
+                            })
+                            .join('')}
+                        </div>
+                      </section>
+                    `;
+                  })
+                  .join('')}
+              </div>
+            `
+            : ''
+        }
+      </div>
     `
     : '<div class="feedback" data-state="success">当前为临时账号，只可查看兑换状态。</div>';
   const rows =
@@ -45,7 +138,13 @@ export function renderRedeemPage(shell, state) {
               <th>兑换状态</th>
             </tr>
           </thead>
-          <tbody>${state.redeemAccounts.map((account) => renderRedeemAccountRow(account, state.getRedeemStatusView(account))).join('')}</tbody>
+          <tbody>${state.redeemAccounts
+            .map((account) =>
+              renderRedeemAccountRow(account, state.getRedeemStatusView(account), {
+                targetMatched: targetMode === REDEEM_TARGET_MODE.all || targetAccountIdSet.has(account.accountId)
+              })
+            )
+            .join('')}</tbody>
         </table>
       </div>
     `;

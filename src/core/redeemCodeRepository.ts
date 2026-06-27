@@ -1,5 +1,9 @@
 import { getDb } from './dbConnection.js';
-import type { RedeemCodeInput, RedeemCodeRedemptionSummaryInput, RedeemCodeRow } from './dbTypes.js';
+import type {
+  RedeemCodeInput,
+  RedeemCodeRedemptionSummaryInput,
+  RedeemCodeRow
+} from './dbTypes.js';
 
 function toRedeemCodeRow(row: {
   code: string;
@@ -36,6 +40,10 @@ function toRedeemCodeRow(row: {
   };
 }
 
+function normalizeCode(code: string): string {
+  return code.trim().toUpperCase();
+}
+
 export async function upsertRedeemCodes(
   codes: RedeemCodeInput[]
 ): Promise<{ inserted: number; updated: number; insertedCodes: string[] }> {
@@ -44,7 +52,7 @@ export async function upsertRedeemCodes(
       codes
         .map((item) => ({
           ...item,
-          code: item.code.trim().toUpperCase(),
+          code: normalizeCode(item.code),
           sourceId: item.sourceId.trim(),
           sourceUrl: item.sourceUrl.trim(),
           title: item.title.trim(),
@@ -157,8 +165,35 @@ export async function listRedeemCodes(limit = 50): Promise<RedeemCodeRow[]> {
   return rows.map(toRedeemCodeRow);
 }
 
+export async function ensureRedeemCodeExists(code: string): Promise<void> {
+  const normalizedCode = normalizeCode(code);
+  if (!normalizedCode) {
+    return;
+  }
+
+  const db = await getDb();
+  const now = Date.now();
+  await db.run(
+    `INSERT OR IGNORE INTO redeem_codes (
+      code,
+      source_id,
+      source_url,
+      title,
+      summary,
+      content,
+      published_at,
+      first_seen_at,
+      last_seen_at
+    ) VALUES (?, 'manual', '', '手动录入兑换码', '', '', ?, ?, ?)`,
+    normalizedCode,
+    now,
+    now,
+    now
+  );
+}
+
 export async function reserveRedeemCodeRedemption(code: string): Promise<boolean> {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return false;
   }
@@ -184,7 +219,7 @@ export async function completeRedeemCodeRedemption(
   code: string,
   summary: RedeemCodeRedemptionSummaryInput
 ): Promise<void> {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return;
   }
@@ -217,7 +252,7 @@ export async function completeRedeemCodeRedemption(
 }
 
 export async function failRedeemCodeRedemption(code: string, error: string): Promise<void> {
-  const normalizedCode = code.trim().toUpperCase();
+  const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return;
   }

@@ -1,5 +1,6 @@
 import { ACCOUNT_STATUS } from '../constants.js';
 import { parseRedeemCodeInput } from '../redeemCodes.js';
+import { REDEEM_TARGET_MODE, REDEEM_TARGET_UNGROUPED, getRedeemAccountGroupKey, getRedeemTargetAccountIds } from '../redeemTargets.js';
 
 function refreshRedeemCodeControls(value, isRunning, retryableCodeFailureCount) {
   const parsed = parseRedeemCodeInput(value);
@@ -49,6 +50,12 @@ export function bindRedeemEvents({
   getRedeemIsRunning,
   persistRedeemCode,
   getRedeemAccounts,
+  getRedeemTargetMode,
+  getRedeemTargetAccountIds,
+  getRedeemCollapsedGroupIds,
+  setRedeemTargetMode,
+  setRedeemTargetAccountIds,
+  setRedeemCollapsedGroupIds,
   getRetryableCodeFailures,
   setRedeemState,
   setRedeemToken,
@@ -57,28 +64,70 @@ export function bindRedeemEvents({
   const redeemCodeInput = document.querySelector('#redeem-code');
   redeemCodeInput?.addEventListener('input', (event) => {
     persistRedeemCode(event.currentTarget.value);
-    refreshRedeemCodeControls(
-      event.currentTarget.value,
-      getRedeemIsRunning(),
-      getRetryableCodeFailures().length
-    );
+    refreshRedeemCodeControls(event.currentTarget.value, getRedeemIsRunning(), getRetryableCodeFailures().length);
   });
-  refreshRedeemCodeControls(
-    redeemCodeInput?.value ?? getRedeemCode(),
-    getRedeemIsRunning(),
-    getRetryableCodeFailures().length
-  );
+  refreshRedeemCodeControls(redeemCodeInput?.value ?? getRedeemCode(), getRedeemIsRunning(), getRetryableCodeFailures().length);
+
+  document.querySelector('#redeem-target-mode')?.addEventListener('change', (event) => {
+    const nextMode = event.currentTarget?.value;
+    if (nextMode !== REDEEM_TARGET_MODE.all && nextMode !== REDEEM_TARGET_MODE.custom) {
+      return;
+    }
+    setRedeemTargetMode(nextMode);
+    void render({ refreshData: false });
+  });
+
+  document.querySelector('#redeem-select-visible')?.addEventListener('click', () => {
+    const selectedAccountIds = new Set(getRedeemTargetAccountIds());
+    const visibleCheckboxes = Array.from(document.querySelectorAll('[data-select-redeem-account]'));
+    const visibleAccountIds = visibleCheckboxes.map((checkbox) => checkbox.dataset.selectRedeemAccount ?? '').filter(Boolean);
+    const allVisibleSelected = visibleAccountIds.length > 0 && visibleAccountIds.every((accountId) => selectedAccountIds.has(accountId));
+
+    if (allVisibleSelected) {
+      for (const accountId of visibleAccountIds) {
+        selectedAccountIds.delete(accountId);
+      }
+    } else {
+      for (const accountId of visibleAccountIds) {
+        selectedAccountIds.add(accountId);
+      }
+    }
+
+    setRedeemTargetAccountIds(selectedAccountIds);
+    void render({ refreshData: false });
+  });
+
+  document.querySelector('#redeem-clear-selected-accounts')?.addEventListener('click', () => {
+    setRedeemTargetAccountIds(new Set());
+    void render({ refreshData: false });
+  });
 
   const startRedeemButton = document.querySelector('#start-redeem');
   startRedeemButton?.addEventListener('click', async () => {
     const nextRedeemCode = redeemCodeInput?.value.trim() ?? '';
     const giftCodes = parseRedeemCodeInput(nextRedeemCode).codes;
+    const targetMode = getRedeemTargetMode();
+    const resolvedTargetAccountIds = getRedeemTargetAccountIdsFromState({
+      accounts: getRedeemAccounts(),
+      mode: targetMode,
+      selectedAccountIds: getRedeemTargetAccountIds()
+    });
+    const requestTargetAccountIds = targetMode === REDEEM_TARGET_MODE.all ? undefined : resolvedTargetAccountIds;
+    const statusTargetAccountIdSet = targetMode === REDEEM_TARGET_MODE.all ? null : new Set(resolvedTargetAccountIds);
 
     if (giftCodes.length === 0) {
       setRedeemState({
         redeemLogs: [{ level: 'error', message: '请输入兑换码。' }]
       });
       void render();
+      return;
+    }
+
+    if (targetMode === REDEEM_TARGET_MODE.custom && resolvedTargetAccountIds.length === 0) {
+      setRedeemState({
+        redeemLogs: [{ level: 'error', message: '请至少选择一个用户，或者切换到全部账号。' }]
+      });
+      void render({ refreshData: false });
       return;
     }
 
@@ -96,7 +145,11 @@ export function bindRedeemEvents({
     setRedeemStatuses(
       Object.fromEntries(
         getRedeemAccounts()
-          .filter((account) => giftCodes.length > 1 || account.status === ACCOUNT_STATUS.pending)
+          .filter(
+            (account) =>
+              (statusTargetAccountIdSet === null || statusTargetAccountIdSet.has(account.accountId)) &&
+              (giftCodes.length > 1 || account.status === ACCOUNT_STATUS.pending)
+          )
           .map((account) => [
             account.accountId,
             { code: ACCOUNT_STATUS.pending, text: giftCodes.length === 1 ? '等待处理' : '等待批量处理' }
@@ -110,11 +163,11 @@ export function bindRedeemEvents({
         giftCodes.length === 1
           ? await api('/api/redeem/run', {
               method: 'POST',
-              body: JSON.stringify({ giftCode: giftCodes[0] })
+              body: JSON.stringify({ giftCode: giftCodes[0], targetAccountIds: requestTargetAccountIds })
             })
           : await api('/api/redeem/run-many', {
               method: 'POST',
-              body: JSON.stringify({ giftCodes })
+              body: JSON.stringify({ giftCodes, targetAccountIds: requestTargetAccountIds })
             });
 
       if (result.ok) {
@@ -138,6 +191,71 @@ export function bindRedeemEvents({
       setRedeemState({ redeemIsRunning: false });
       void render();
     }
+  });
+
+  document.querySelector('.redeem-panel')?.addEventListener('change', (event) => {
+    const groupCheckbox = event.target?.closest?.('[data-select-redeem-group]');
+    if (groupCheckbox) {
+      const groupId = groupCheckbox.dataset.selectRedeemGroup ?? REDEEM_TARGET_UNGROUPED;
+      const selectedAccountIds = new Set(getRedeemTargetAccountIds());
+      const groupAccountIds = getRedeemAccounts()
+        .filter((account) => getRedeemAccountGroupKey(account) === groupId)
+        .map((account) => account.accountId);
+
+      if (groupCheckbox.checked) {
+        for (const accountId of groupAccountIds) {
+          selectedAccountIds.add(accountId);
+        }
+      } else {
+        for (const accountId of groupAccountIds) {
+          selectedAccountIds.delete(accountId);
+        }
+      }
+
+      setRedeemTargetAccountIds(selectedAccountIds);
+      void render({ refreshData: false });
+      return;
+    }
+
+    const checkbox = event.target?.closest?.('[data-select-redeem-account]');
+    if (!checkbox) {
+      return;
+    }
+
+    const accountId = checkbox.dataset.selectRedeemAccount;
+    if (!accountId) {
+      return;
+    }
+
+    const selectedAccountIds = new Set(getRedeemTargetAccountIds());
+    if (checkbox.checked) {
+      selectedAccountIds.add(accountId);
+    } else {
+      selectedAccountIds.delete(accountId);
+    }
+    setRedeemTargetAccountIds(selectedAccountIds);
+    void render({ refreshData: false });
+  });
+
+  document.querySelector('.redeem-panel')?.addEventListener('click', (event) => {
+    const toggleButton = event.target?.closest?.('[data-toggle-redeem-group]');
+    if (!toggleButton) {
+      return;
+    }
+
+    const groupId = toggleButton.dataset.toggleRedeemGroup;
+    if (!groupId) {
+      return;
+    }
+
+    const collapsedGroupIds = new Set(getRedeemCollapsedGroupIds());
+    if (collapsedGroupIds.has(groupId)) {
+      collapsedGroupIds.delete(groupId);
+    } else {
+      collapsedGroupIds.add(groupId);
+    }
+    setRedeemCollapsedGroupIds(collapsedGroupIds);
+    void render({ refreshData: false });
   });
 
   const retryFailedRedeemButton = document.querySelector('#retry-failed-redeem');
@@ -341,4 +459,8 @@ export function bindRedeemEvents({
       }
     }
   });
+}
+
+function getRedeemTargetAccountIdsFromState({ accounts, mode, selectedAccountIds }) {
+  return getRedeemTargetAccountIds(accounts, mode, selectedAccountIds);
 }

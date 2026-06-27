@@ -10,6 +10,7 @@ import { bindRedeemEvents } from './js/events/redeemEvents.js';
 import { bindRouteEvents } from './js/events/routeEvents.js';
 import { bindVisitorEvents } from './js/events/visitorEvents.js';
 import { extractFailureReason, getDefaultRedeemStatus } from './js/redeemStatus.js';
+import { REDEEM_TARGET_MODE } from './js/redeemTargets.js';
 import { createJsonEventSource } from './js/sse.js';
 import { readStoredRedeemCode, writeStoredRedeemCode } from './js/storage.js';
 import { renderAccountBlacklistModal as renderBlacklistModal } from './js/accountViews.js';
@@ -55,6 +56,9 @@ let redeemProgressSubscribed = false;
 let redeemConfigLoaded = false;
 let redeemAccounts = [];
 let redeemStatuses = {};
+let redeemTargetMode = REDEEM_TARGET_MODE.all;
+let redeemTargetAccountIds = new Set();
+let redeemCollapsedGroupIds = new Set();
 let listAccountsCache = [];
 let blacklistedAccounts = [];
 let accountBlacklistModalOpen = false;
@@ -289,6 +293,14 @@ function shell(content, pageClass = '') {
   return createShell(content, { currentRoute, authUsername, pageClass });
 }
 
+function normalizeRedeemTargetSelection() {
+  const accountIdSet = new Set(redeemAccounts.map((account) => account.accountId));
+  redeemTargetAccountIds = new Set([...redeemTargetAccountIds].filter((accountId) => accountIdSet.has(accountId)));
+  const groupIdSet = new Set(accountGroups.map((group) => group.groupId));
+  groupIdSet.add('__ungrouped__');
+  redeemCollapsedGroupIds = new Set([...redeemCollapsedGroupIds].filter((groupId) => groupIdSet.has(groupId)));
+}
+
 async function renderListPage(refreshData = true) {
   if (refreshData) {
     const [accounts, adminBlacklistedAccounts, adminGroups] = await Promise.all([
@@ -418,7 +430,13 @@ async function render({ refreshData = true } = {}) {
   }
 
   if (currentRoute === 'redeem' && refreshData) {
-    redeemAccounts = await api('/api/accounts');
+    const [accounts, adminGroups] = await Promise.all([
+      api('/api/accounts'),
+      isAdminUser() ? api('/api/account-groups') : Promise.resolve([])
+    ]);
+    redeemAccounts = accounts;
+    accountGroups = adminGroups;
+    normalizeRedeemTargetSelection();
     redeemAccountsLoaded = true;
   }
 
@@ -489,6 +507,11 @@ async function render({ refreshData = true } = {}) {
       redeemLogsVersion,
       redeemCodeSummariesVersion,
       redeemAccounts,
+      accountGroups,
+      redeemTargetMode,
+      redeemTargetAccountIds: [...redeemTargetAccountIds],
+      redeemCollapsedGroupIds: [...redeemCollapsedGroupIds],
+      redeemVisibleAccountIds: redeemAccounts.map((account) => account.accountId),
       retryableCodeFailures: getRetryableCodeFailures(),
       getRedeemStatusView
     });
@@ -544,6 +567,9 @@ function bindEvents() {
       accountGroups = [];
       selectedAccountIds = new Set();
       accountGroupFilter = 'ungrouped';
+      redeemTargetMode = REDEEM_TARGET_MODE.all;
+      redeemTargetAccountIds = new Set();
+      redeemCollapsedGroupIds = new Set();
       visitorLogs = [];
       visitorBlacklist = [];
       visitorPathFilter = '';
@@ -631,6 +657,18 @@ function bindEvents() {
     getRedeemIsRunning: () => redeemIsRunning,
     persistRedeemCode,
     getRedeemAccounts: () => redeemAccounts,
+    getRedeemTargetMode: () => redeemTargetMode,
+    getRedeemTargetAccountIds: () => redeemTargetAccountIds,
+    getRedeemCollapsedGroupIds: () => redeemCollapsedGroupIds,
+    setRedeemTargetMode: (value) => {
+      redeemTargetMode = value;
+    },
+    setRedeemTargetAccountIds: (value) => {
+      redeemTargetAccountIds = value;
+    },
+    setRedeemCollapsedGroupIds: (value) => {
+      redeemCollapsedGroupIds = value;
+    },
     getRetryableCodeFailures,
     setRedeemToken: (value) => {
       redeemToken = value;
@@ -704,6 +742,11 @@ function refreshRedeemUi() {
     redeemIsRunning,
     redeemCode,
     redeemAccounts,
+    redeemTargetMode,
+    redeemTargetAccountIds: [...redeemTargetAccountIds],
+    redeemCollapsedGroupIds: [...redeemCollapsedGroupIds],
+    redeemVisibleAccountIds: redeemAccounts.map((account) => account.accountId),
+    accountGroups,
     retryableCodeFailures: getRetryableCodeFailures(),
     getRedeemStatusView
   });

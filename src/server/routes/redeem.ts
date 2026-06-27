@@ -6,7 +6,6 @@ export function registerRedeemRoutes({
   app,
   authService,
   redeemService,
-  autoRedeemCoordinator,
   sseHub,
   pollActiveRedeemCodeSource
 }: ApiRouteContext): void {
@@ -19,8 +18,12 @@ export function registerRedeemRoutes({
 
   app.post('/api/redeem/run', requireRole('admin'), async (req, res) => {
     try {
-      const { giftCode } = req.body as { giftCode?: string };
-      const result = await redeemService.runBatchRedeem(giftCode ?? '', undefined, { autoRetryFailedOnce: true });
+      const { giftCode, targetAccountIds } = req.body as { giftCode?: string; targetAccountIds?: string[] };
+      const result = await redeemService.runBatchRedeem(
+        giftCode ?? '',
+        Array.isArray(targetAccountIds) ? targetAccountIds : undefined,
+        { autoRetryFailedOnce: true, includeTargetAccounts: Array.isArray(targetAccountIds) && targetAccountIds.length > 0 }
+      );
       res.json({ ok: true, data: result });
     } catch (error) {
       res.json({
@@ -32,8 +35,11 @@ export function registerRedeemRoutes({
 
   app.post('/api/redeem/run-many', requireRole('admin'), async (req, res) => {
     try {
-      const { giftCodes } = req.body as { giftCodes?: string[] };
-      const result = await redeemService.runMultiCodeRedeem(Array.isArray(giftCodes) ? giftCodes : []);
+      const { giftCodes, targetAccountIds } = req.body as { giftCodes?: string[]; targetAccountIds?: string[] };
+      const result = await redeemService.runMultiCodeRedeem(
+        Array.isArray(giftCodes) ? giftCodes : [],
+        Array.isArray(targetAccountIds) ? targetAccountIds : undefined
+      );
       res.json({ ok: true, data: result });
     } catch (error) {
       res.json({
@@ -94,7 +100,6 @@ export function registerRedeemRoutes({
   app.post('/api/redeem-codes/sync', requireRole('admin'), async (_req, res) => {
     try {
       const result = await pollActiveRedeemCodeSource();
-      await autoRedeemCoordinator.enqueueAutoRedeemCodes(result.insertedCodes);
       res.json({
         ok: true,
         ...result

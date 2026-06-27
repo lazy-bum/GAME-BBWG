@@ -116,15 +116,16 @@ export function renderAccountRow(account, options) {
   `;
 }
 
-export function renderRedeemAccountRow(account, statusView) {
+export function renderRedeemAccountRow(account, statusView, options = {}) {
   const gameAvatar = account.details?.avatar_image?.trim() || '';
   const gameName = account.name?.trim() || account.accountId;
   const avatarContent = gameAvatar
     ? `<img class="avatar-image" src="${escapeAttribute(gameAvatar)}" alt="${escapeAttribute(gameName)}" loading="lazy" />`
     : '<span class="avatar-fallback">无头像</span>';
+  const rowClassName = options.targetMatched === false ? 'redeem-row-muted' : '';
 
   return `
-    <tr data-redeem-account-id="${escapeAttribute(account.accountId)}">
+    <tr data-redeem-account-id="${escapeAttribute(account.accountId)}" class="${rowClassName}">
       <td data-label="头像">${avatarContent}</td>
       <td data-label="名字">${escapeHtml(gameName)}</td>
       <td data-label="分组">${renderAccountGroupBadge(account)}</td>

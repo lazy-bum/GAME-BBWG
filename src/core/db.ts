@@ -30,6 +30,7 @@ export {
 } from './visitorRepository.js';
 export {
   completeRedeemCodeRedemption,
+  ensureRedeemCodeExists,
   failRedeemCodeRedemption,
   listRedeemCodes,
   reserveRedeemCodeRedemption,
