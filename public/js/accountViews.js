@@ -67,6 +67,73 @@ export function renderAccountBlacklistModal({ isAdmin, blacklistedAccounts, acco
   `;
 }
 
+export function renderAccountMissingRedeemCodesModal({ accountMissingRedeemCodesModal }) {
+  const selectedAccountId = accountMissingRedeemCodesModal?.accountId ?? '';
+  const missingCodes = Array.isArray(accountMissingRedeemCodesModal?.missingCodes) ? accountMissingRedeemCodesModal.missingCodes : [];
+
+  const modalContent =
+    missingCodes.length === 0
+      ? '<div class="empty-state blacklist-empty">当前没有未兑换的兑换码。</div>'
+      : `
+      <div class="table-wrap blacklist-wrap account-missing-redeem-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>兑换码</th>
+              <th>来源</th>
+              <th>等级限制</th>
+              <th>未兑换原因</th>
+              <th>上次尝试</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${missingCodes
+              .map(
+                (item) => `
+                  <tr>
+                    <td data-label="兑换码">
+                      <div class="redeem-code-main-cell">
+                        <strong>${escapeHtml(item.code)}</strong>
+                        ${item.title ? `<span>${escapeHtml(item.title)}</span>` : ''}
+                      </div>
+                    </td>
+                    <td data-label="来源">${escapeHtml(item.sourceId || 'manual')}</td>
+                    <td data-label="等级限制">${item.minLevel ? `Lv.${item.minLevel}` : '不限'}</td>
+                    <td data-label="未兑换原因">${escapeHtml(item.missingReason || '-')}</td>
+                    <td data-label="上次尝试">${escapeHtml(item.lastTriedAt ? new Date(item.lastTriedAt).toLocaleString('zh-CN', { hour12: false }) : '-')}</td>
+                  </tr>
+                `
+              )
+              .join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+  return `
+    <div class="visitor-modal-backdrop" id="account-missing-redeem-modal" ${selectedAccountId ? '' : 'hidden'}>
+      <div class="visitor-modal" role="dialog" aria-modal="true" aria-labelledby="account-missing-redeem-title">
+        <div class="visitor-modal-head">
+          <h3 id="account-missing-redeem-title">未兑换兑换码：${escapeHtml(selectedAccountId)}</h3>
+        </div>
+        <div class="visitor-modal-body">
+          ${modalContent}
+        </div>
+        <div class="visitor-modal-actions">
+          <button
+            class="primary-button"
+            id="redeem-account-missing-codes"
+            ${missingCodes.some((item) => item.canRedeem) ? '' : 'disabled'}
+          >
+            一键兑换可补兑换码
+          </button>
+          <button class="secondary-button" id="close-account-missing-redeem">关闭</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function renderAccountRow(account, options) {
   const gameAvatar = account.details?.avatar_image?.trim() || '';
   const gameZone = account.kid?.toString().trim() || '-';
@@ -106,6 +173,7 @@ export function renderAccountRow(account, options) {
         options.isAdmin
           ? `
       <td class="table-actions" data-label="操作">
+        <button class="secondary-button" data-view-account-missing-redeem="${escapeAttribute(account.accountId)}">缺码查询</button>
         <button class="secondary-button" data-blacklist-account="${escapeAttribute(account.accountId)}">拉黑</button>
         <button class="danger-button" data-delete-account="${escapeAttribute(account.accountId)}">删除</button>
       </td>

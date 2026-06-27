@@ -37,6 +37,7 @@ export interface RedeemRunOptions {
   includeTargetAccounts?: boolean;
   initialDelayMs?: number;
   autoRetryFailedOnce?: boolean;
+  minLevel?: number;
 }
 
 export interface ApiEnvelope {

@@ -82,13 +82,56 @@ export interface RedeemCodeInput {
   publishedAt: number;
 }
 
+export type RedeemCodeValidityType = 'permanent' | 'timed';
+export type RedeemAccountResultStatus = 'success' | 'received' | 'level_limited' | 'failed';
+
+export interface RedeemCodeManageInput {
+  code: string;
+  validityType: RedeemCodeValidityType;
+  validFrom?: number;
+  validUntil?: number;
+  minLevel?: number;
+  note?: string;
+}
+
 export interface RedeemCodeRow extends RedeemCodeInput {
   firstSeenAt: number;
   lastSeenAt: number;
+  validityType: RedeemCodeValidityType;
+  validFrom?: number;
+  validUntil?: number;
+  minLevel?: number;
+  note: string;
+  createdAt: number;
+  updatedAt: number;
+  isCurrentlyValid: boolean;
+  invalidReason?: string;
+  failedAccountIds: string[];
+  failedAccounts: Array<{
+    accountId: string;
+    name: string;
+    groupName: string;
+    level?: number;
+  }>;
   autoRedeemStatus?: RedeemCodeRedemptionStatus;
   autoRedeemStartedAt?: number;
   autoRedeemCompletedAt?: number;
   autoRedeemLastError?: string;
+}
+
+export interface AccountMissingRedeemCodeRow {
+  code: string;
+  title: string;
+  note: string;
+  sourceId: string;
+  minLevel?: number;
+  validFrom?: number;
+  validUntil?: number;
+  lastTriedAt?: number;
+  lastResultStatus?: RedeemAccountResultStatus;
+  lastResultMessage?: string;
+  missingReason: string;
+  canRedeem: boolean;
 }
 
 export type RedeemCodeRedemptionStatus = 'running' | 'completed' | 'failed';
@@ -100,6 +143,7 @@ export interface RedeemCodeRedemptionSummaryInput {
   receivedCount: number;
   failureCount: number;
   remaining: number;
+  failedAccountIds: string[];
 }
 
 export interface WechatArticleInput {

@@ -7,18 +7,23 @@ import { bindGroupEvents } from './js/events/groupEvents.js';
 import { bindListEvents } from './js/events/listEvents.js';
 import { bindMediaEvents } from './js/events/mediaEvents.js';
 import { bindRedeemEvents } from './js/events/redeemEvents.js';
+import { bindRedeemCodeManagementEvents } from './js/events/redeemCodeManagementEvents.js';
 import { bindRouteEvents } from './js/events/routeEvents.js';
 import { bindVisitorEvents } from './js/events/visitorEvents.js';
 import { extractFailureReason, getDefaultRedeemStatus } from './js/redeemStatus.js';
 import { REDEEM_TARGET_MODE } from './js/redeemTargets.js';
 import { createJsonEventSource } from './js/sse.js';
 import { readStoredRedeemCode, writeStoredRedeemCode } from './js/storage.js';
-import { renderAccountBlacklistModal as renderBlacklistModal } from './js/accountViews.js';
+import {
+  renderAccountBlacklistModal as renderBlacklistModal,
+  renderAccountMissingRedeemCodesModal
+} from './js/accountViews.js';
 import { renderCreatePage as renderCreateView } from './js/views/createView.js';
 import { renderGroupsPage as renderGroupsView } from './js/views/groupsView.js';
 import { renderHomePage as renderHomeView } from './js/views/homeView.js';
 import { renderListPage as renderListView } from './js/views/listView.js';
 import { renderLoginPage as renderLoginView } from './js/views/loginView.js';
+import { renderRedeemCodeManagementPage as renderRedeemCodeManagementView } from './js/views/redeemCodeManagementView.js';
 import { renderRedeemPage as renderRedeemView } from './js/views/redeemView.js';
 import { createShell } from './js/views/shellView.js';
 import { renderVisitorPage as renderVisitorView } from './js/views/visitorView.js';
@@ -62,6 +67,7 @@ let redeemCollapsedGroupIds = new Set();
 let listAccountsCache = [];
 let blacklistedAccounts = [];
 let accountBlacklistModalOpen = false;
+let accountMissingRedeemCodesModal = null;
 let accountGroups = [];
 let selectedAccountIds = new Set();
 let accountGroupFilter = 'ungrouped';
@@ -72,10 +78,13 @@ let visitorLogLimit = 100;
 let visitorBlockTargetIp = '';
 let visitorPathFilter = '';
 let visitorVisibleCount = 10;
+let redeemCodeItems = [];
+let redeemCodeFailedAccountsModal = null;
 let listDataLoaded = false;
 let redeemAccountsLoaded = false;
 let groupsDataLoaded = false;
 let visitorsDataLoaded = false;
+let redeemCodesDataLoaded = false;
 
 let eventSource = null;
 let importEventSource = null;
@@ -241,6 +250,9 @@ async function api(path, options) {
     if (path.startsWith('/api/visitor-')) {
       visitorsDataLoaded = false;
     }
+    if (path.startsWith('/api/redeem-codes')) {
+      redeemCodesDataLoaded = false;
+    }
   }
   return result;
 }
@@ -263,7 +275,7 @@ function closeImportEventSource() {
 
 function getRouteFromHash() {
   const hash = window.location.hash.replace('#', '');
-  if (hash === 'create' || hash === 'list' || hash === 'redeem' || hash === 'groups' || hash === 'visitors') {
+  if (hash === 'create' || hash === 'list' || hash === 'redeem' || hash === 'redeem-codes' || hash === 'groups' || hash === 'visitors') {
     return hash;
   }
   return 'home';
@@ -353,6 +365,9 @@ async function renderListPage(refreshData = true) {
       isAdmin: isAdminUser(),
       blacklistedAccounts,
       accountBlacklistModalOpen
+    }),
+    accountMissingRedeemCodesModal: renderAccountMissingRedeemCodesModal({
+      accountMissingRedeemCodesModal
     })
   });
 }
@@ -424,7 +439,7 @@ async function render({ refreshData = true } = {}) {
     redeemConfigLoaded = true;
   }
 
-  if ((currentRoute === 'visitors' || currentRoute === 'groups') && !isAdminUser()) {
+  if ((currentRoute === 'visitors' || currentRoute === 'groups' || currentRoute === 'redeem-codes') && !isAdminUser()) {
     currentRoute = 'home';
     window.location.hash = '';
   }
@@ -450,6 +465,11 @@ async function render({ refreshData = true } = {}) {
     visitorBlacklist = blacklistResult || [];
     visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
     visitorsDataLoaded = true;
+  }
+
+  if (currentRoute === 'redeem-codes' && isAdminUser() && refreshData) {
+    redeemCodeItems = await api('/api/redeem-codes?limit=500');
+    redeemCodesDataLoaded = true;
   }
 
   if (currentRoute === 'groups' && isAdminUser() && refreshData) {
@@ -481,6 +501,12 @@ async function render({ refreshData = true } = {}) {
     app.innerHTML = listHtml;
   } else if (currentRoute === 'groups' && isAdminUser()) {
     app.innerHTML = renderGroupsView(shell, { accountGroups });
+  } else if (currentRoute === 'redeem-codes' && isAdminUser()) {
+    app.innerHTML = renderRedeemCodeManagementView(shell, {
+      isAdmin: isAdminUser(),
+      redeemCodeItems,
+      redeemCodeFailedAccountsModal
+    });
   } else if (currentRoute === 'visitors' && isAdminUser()) {
     app.innerHTML = renderVisitorView(shell, {
       visitorLogs,
@@ -564,6 +590,7 @@ function bindEvents() {
       redeemStatuses = {};
       blacklistedAccounts = [];
       accountBlacklistModalOpen = false;
+      accountMissingRedeemCodesModal = null;
       accountGroups = [];
       selectedAccountIds = new Set();
       accountGroupFilter = 'ungrouped';
@@ -574,10 +601,13 @@ function bindEvents() {
       visitorBlacklist = [];
       visitorPathFilter = '';
       visitorVisibleCount = VISITOR_LOG_BATCH_SIZE;
+      redeemCodeItems = [];
+      redeemCodeFailedAccountsModal = null;
       listDataLoaded = false;
       redeemAccountsLoaded = false;
       groupsDataLoaded = false;
       visitorsDataLoaded = false;
+      redeemCodesDataLoaded = false;
       disconnectVisitorLogObserver();
       closeEventSource();
       closeImportEventSource();
@@ -599,6 +629,15 @@ function bindEvents() {
     }
   });
   bindGroupEvents({ api, render });
+  bindRedeemCodeManagementEvents({
+    api,
+    render,
+    renderLocal: () => render({ refreshData: false }),
+    getRedeemCodeItems: () => redeemCodeItems,
+    setRedeemCodeFailedAccountsModal: (value) => {
+      redeemCodeFailedAccountsModal = value;
+    }
+  });
   bindVisitorEvents({
     api,
     render,
@@ -635,6 +674,10 @@ function bindEvents() {
     },
     setAccountBlacklistModalOpen: (value) => {
       accountBlacklistModalOpen = value;
+    },
+    getAccountMissingRedeemCodesModal: () => accountMissingRedeemCodesModal,
+    setAccountMissingRedeemCodesModal: (value) => {
+      accountMissingRedeemCodesModal = value;
     },
     getAccountGroupFilter: () => accountGroupFilter,
     setAccountGroupFilter: (value) => {
@@ -856,6 +899,7 @@ window.addEventListener('hashchange', () => {
   const hasCachedData =
     (currentRoute === 'list' && listDataLoaded) ||
     (currentRoute === 'redeem' && redeemAccountsLoaded) ||
+    (currentRoute === 'redeem-codes' && redeemCodesDataLoaded) ||
     (currentRoute === 'groups' && groupsDataLoaded) ||
     (currentRoute === 'visitors' && visitorsDataLoaded) ||
     currentRoute === 'home' ||

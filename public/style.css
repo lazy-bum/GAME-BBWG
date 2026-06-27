@@ -623,6 +623,95 @@ button {
   word-break: break-all;
 }
 
+.redeem-code-manage-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.redeem-code-manage-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.redeem-code-manage-card h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #14213d;
+}
+
+.redeem-code-manage-panel .search-input {
+  width: 100%;
+}
+
+.redeem-code-time-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.redeem-code-batch-textarea {
+  min-height: 172px;
+  resize: vertical;
+}
+
+.redeem-code-main-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.redeem-code-main-cell strong {
+  font-size: 15px;
+  word-break: break-all;
+}
+
+.redeem-code-main-cell span {
+  color: #5e6b80;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.redeem-code-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.redeem-code-status-badge.is-valid {
+  background: rgba(18, 183, 106, 0.1);
+  color: #067647;
+}
+
+.redeem-code-status-badge.is-invalid {
+  background: rgba(240, 68, 56, 0.1);
+  color: #b42318;
+}
+
+.redeem-code-failed-modal {
+  width: min(100%, 760px);
+}
+
+.redeem-code-failed-wrap td,
+.redeem-code-failed-wrap th {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.redeem-code-failed-empty {
+  min-height: 140px;
+  font-size: 15px;
+}
+
 .redeem-row-muted {
   opacity: 0.55;
 }
@@ -1333,6 +1422,12 @@ tbody tr:hover {
   justify-content: center;
 }
 
+.account-missing-redeem-wrap td,
+.account-missing-redeem-wrap th {
+  white-space: normal;
+  word-break: break-word;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
@@ -1371,6 +1466,11 @@ tbody tr:hover {
   .visitor-toolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .redeem-code-manage-grid,
+  .redeem-code-time-grid {
+    grid-template-columns: 1fr;
   }
 
   .batch-toolbar,

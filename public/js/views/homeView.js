@@ -22,6 +22,11 @@ export function renderHomePage(shell, { isAdmin }) {
           ${
             isAdmin
               ? `
+          <button class="nav-card home-nav-card" data-route="redeem-codes">
+            <span class="home-card-glow"></span>
+            <span class="home-card-label">兑换码管理</span>
+            <span class="home-card-meta">录入兑换码并配置有效期与等级限制</span>
+          </button>
           <button class="nav-card home-nav-card" data-route="groups">
             <span class="home-card-glow"></span>
             <span class="home-card-label">分组管理</span>

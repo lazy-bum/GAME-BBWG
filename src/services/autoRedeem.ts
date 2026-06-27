@@ -105,6 +105,11 @@ export class AutoRedeemCoordinator {
 
     for (const normalizedCode of normalizedCodes) {
       const redeemCode = redeemCodeMap.get(normalizedCode);
+      if (!redeemCode?.isCurrentlyValid) {
+        // eslint-disable-next-line no-console
+        console.log(`auto redeem skipped for inactive code ${normalizedCode}, reason=${redeemCode?.invalidReason ?? 'unknown'}`);
+        continue;
+      }
       const publishedAt = redeemCode?.publishedAt ?? 0;
       if (publishedAt <= 0 || now - publishedAt > AUTO_REDEEM_MAX_CODE_AGE_MS) {
         // eslint-disable-next-line no-console
@@ -185,7 +190,7 @@ export class AutoRedeemCoordinator {
       while (this.newAccountRedeemQueue.length > 0) {
         const accountIds = this.newAccountRedeemQueue.drainAll();
         try {
-          const [latestCode] = await listRedeemCodes(1);
+          const latestCode = (await listRedeemCodes(50)).find((item) => item.isCurrentlyValid);
           if (!latestCode) {
             // eslint-disable-next-line no-console
             console.log(`新增账号补兑最新兑换码已跳过：未找到兑换码，账号数=${accountIds.length}`);

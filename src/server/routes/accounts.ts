@@ -13,6 +13,7 @@ import {
   listAccountGroups,
   updateAccountGroup
 } from '../../core/accountGroupRepository.js';
+import { listMissingRedeemCodesForAccount } from '../../core/redeemAccountResultRepository.js';
 import { sendJsonError } from '../http.js';
 import type { ApiRouteContext } from './types.js';
 
@@ -21,6 +22,7 @@ export function registerAccountRoutes({
   authService,
   accountImportService,
   autoRedeemCoordinator,
+  redeemService,
   sseHub
 }: ApiRouteContext): void {
   const requireAuth = authService.requireAuth;
@@ -175,6 +177,47 @@ export function registerAccountRoutes({
       const { accountIds } = req.body as { accountIds?: string[] };
       await reorderAccounts(Array.isArray(accountIds) ? accountIds : []);
       res.json({ ok: true });
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.get('/api/accounts/:accountId/missing-redeem-codes', requireRole('admin'), async (req, res) => {
+    try {
+      const accountId = Array.isArray(req.params.accountId) ? req.params.accountId[0] : req.params.accountId;
+      res.json(await listMissingRedeemCodesForAccount(accountId));
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.post('/api/accounts/:accountId/redeem-missing-codes', requireRole('admin'), async (req, res) => {
+    try {
+      const accountId = Array.isArray(req.params.accountId) ? req.params.accountId[0] : req.params.accountId;
+      const missingCodes = await listMissingRedeemCodesForAccount(accountId);
+      const redeemableCodes = missingCodes.filter((item) => item.canRedeem).map((item) => item.code);
+
+      if (redeemableCodes.length === 0) {
+        res.json({
+          ok: true,
+          data: {
+            accountId,
+            processedCodes: 0,
+            totalCodes: 0,
+            summaries: []
+          }
+        });
+        return;
+      }
+
+      const result = await redeemService.runMultiCodeRedeem(redeemableCodes, [accountId]);
+      res.json({
+        ok: true,
+        data: {
+          accountId,
+          ...result
+        }
+      });
     } catch (error) {
       sendJsonError(res, error);
     }

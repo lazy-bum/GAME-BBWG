@@ -3,6 +3,7 @@ import {
   updateAccountProfile,
   updateAccountStatus
 } from '../core/accountRepository.js';
+import { upsertRedeemAccountResult } from '../core/redeemAccountResultRepository.js';
 import { ACCOUNT_STATUS, type AccountRow } from '../core/dbTypes.js';
 import { RedeemCancelledError } from './redeemCancellation.js';
 import { isTimeoutRetryMessage, submitLoginRequest, submitRedeemRequest } from './redeemClient.js';
@@ -61,6 +62,12 @@ export class RedeemAccountProcessor {
 
       if (!loginResponse.ok) {
         await updateAccountStatus(account.accountId, ACCOUNT_STATUS.failed);
+        await upsertRedeemAccountResult({
+          code: giftCode,
+          accountId: account.accountId,
+          status: 'failed',
+          message: `HTTP ${loginResponse.status}`
+        });
         this.options.log('error', `登录请求失败: HTTP ${loginResponse.status} (${account.accountId})`);
         return { successCount: 0, receivedCount: 0, failureCount: 1 };
       }
@@ -68,6 +75,12 @@ export class RedeemAccountProcessor {
       const loginResult = (await loginResponse.json()) as ApiEnvelope;
       if (loginResult.code !== 0 || !loginResult.data) {
         await updateAccountStatus(account.accountId, ACCOUNT_STATUS.failed);
+        await upsertRedeemAccountResult({
+          code: giftCode,
+          accountId: account.accountId,
+          status: 'failed',
+          message: loginResult.msg ?? '接口返回异常'
+        });
         this.options.log('error', `登录失败: ${loginResult.msg ?? '接口返回异常'} (${account.accountId})`);
         return { successCount: 0, receivedCount: 0, failureCount: 1 };
       }
@@ -88,20 +101,44 @@ export class RedeemAccountProcessor {
       if (code === 0 || isReceivedMessage(message) || isLevelLimitMessage(message)) {
         await updateAccountStatus(account.accountId, ACCOUNT_STATUS.redeemed);
         if (code === 0) {
+          await upsertRedeemAccountResult({
+            code: giftCode,
+            accountId: account.accountId,
+            status: 'success',
+            message
+          });
           this.options.log('success', `兑换成功: ${nickname || account.accountId} (${account.accountId})`);
           return { successCount: 1, receivedCount: 0, failureCount: 0 };
         }
 
         if (isLevelLimitMessage(message)) {
+          await upsertRedeemAccountResult({
+            code: giftCode,
+            accountId: account.accountId,
+            status: 'level_limited',
+            message
+          });
           this.options.log('warn', `兑换成功-等级不足: ${nickname || account.accountId} (${account.accountId}) - ${message}`);
           return { successCount: 1, receivedCount: 0, failureCount: 0 };
         }
 
+        await upsertRedeemAccountResult({
+          code: giftCode,
+          accountId: account.accountId,
+          status: 'received',
+          message
+        });
         this.options.log('warn', `已领取: ${nickname || account.accountId} (${account.accountId})`);
         return { successCount: 0, receivedCount: 1, failureCount: 0 };
       }
 
       await updateAccountStatus(account.accountId, ACCOUNT_STATUS.failed);
+      await upsertRedeemAccountResult({
+        code: giftCode,
+        accountId: account.accountId,
+        status: 'failed',
+        message
+      });
       this.options.log('warn', `兑换失败: ${nickname || account.accountId} (${account.accountId}) - ${message}`);
       return { successCount: 0, receivedCount: 0, failureCount: 1 };
     } catch (error) {
@@ -118,6 +155,12 @@ export class RedeemAccountProcessor {
               ? error.message
               : '未知错误';
       await updateAccountStatus(account.accountId, ACCOUNT_STATUS.failed);
+      await upsertRedeemAccountResult({
+        code: giftCode,
+        accountId: account.accountId,
+        status: 'failed',
+        message
+      });
       if (error instanceof Error && error.message.startsWith('HTTP ')) {
         this.options.log('error', `兑换请求失败: ${message} (${account.accountId})`);
       } else {

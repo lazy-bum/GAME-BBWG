@@ -92,5 +92,6 @@ export function renderListPage(shell, state) {
       }
     </section>
     ${state.accountBlacklistModal}
+    ${state.accountMissingRedeemCodesModal}
   `);
 }

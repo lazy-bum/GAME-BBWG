@@ -1,4 +1,8 @@
-import { listRedeemCodes } from '../../core/redeemCodeRepository.js';
+import {
+  createManagedRedeemCodes,
+  deleteRedeemCode,
+  listRedeemCodes
+} from '../../core/redeemCodeRepository.js';
 import { sendJsonError } from '../http.js';
 import type { ApiRouteContext } from './types.js';
 
@@ -92,6 +96,69 @@ export function registerRedeemRoutes({
       const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(parsedLimit, 200)) : 50;
       const rows = await listRedeemCodes(limit);
       res.json(rows);
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.post('/api/redeem-codes', requireRole('admin'), async (req, res) => {
+    try {
+      const body = (req.body ?? {}) as {
+        code?: string;
+        validityType?: 'permanent' | 'timed';
+        validFrom?: number;
+        validUntil?: number;
+        minLevel?: number;
+        note?: string;
+      };
+      const result = await createManagedRedeemCodes([
+        {
+          code: body.code ?? '',
+          validityType: body.validityType ?? 'permanent',
+          validFrom: body.validFrom,
+          validUntil: body.validUntil,
+          minLevel: body.minLevel,
+          note: body.note
+        }
+      ]);
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.post('/api/redeem-codes/batch', requireRole('admin'), async (req, res) => {
+    try {
+      const body = (req.body ?? {}) as {
+        codes?: string[];
+        validityType?: 'permanent' | 'timed';
+        validFrom?: number;
+        validUntil?: number;
+        minLevel?: number;
+        note?: string;
+      };
+      const codes = Array.isArray(body.codes) ? body.codes : [];
+      const result = await createManagedRedeemCodes(
+        codes.map((code) => ({
+          code,
+          validityType: body.validityType ?? 'permanent',
+          validFrom: body.validFrom,
+          validUntil: body.validUntil,
+          minLevel: body.minLevel,
+          note: body.note
+        }))
+      );
+      res.json({ ok: true, data: result });
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.delete('/api/redeem-codes/:code', requireRole('admin'), async (req, res) => {
+    try {
+      const rawCode = req.params.code;
+      const deleted = await deleteRedeemCode(Array.isArray(rawCode) ? rawCode[0] ?? '' : rawCode ?? '');
+      res.json({ ok: true, deleted });
     } catch (error) {
       sendJsonError(res, error);
     }

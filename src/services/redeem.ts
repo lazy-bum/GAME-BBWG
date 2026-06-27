@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { forceSetAllAccountsRedeemed, listAccountsByIdsIncludingDeleted } from '../core/accountRepository.js';
+import { getRedeemCodeByCode } from '../core/redeemCodeRepository.js';
 import { RedeemAccountProcessor } from './redeemAccountProcessor.js';
 import { countRemainingRedeemAccounts, selectRedeemAccounts } from './redeemAccountSelector.js';
 import { RedeemCancelledError } from './redeemCancellation.js';
@@ -122,15 +123,25 @@ export class RedeemService extends EventEmitter {
     progressContext: RedeemProgressContext = {}
   ): Promise<RedeemSummary> {
     let runState = new RedeemRunState(0, false);
+    let resolvedOptions = options;
     try {
       const trimmedCode = giftCode.trim();
       if (!trimmedCode) {
         throw new Error('请输入兑换码');
       }
 
+      const managedRedeemCode = await getRedeemCodeByCode(trimmedCode);
+      if (managedRedeemCode && !managedRedeemCode.isCurrentlyValid) {
+        throw new Error(`兑换码当前不可用：${managedRedeemCode.invalidReason ?? '已失效'}`);
+      }
+      resolvedOptions =
+        managedRedeemCode?.minLevel && managedRedeemCode.minLevel > 0
+          ? { ...options, minLevel: options?.minLevel ?? managedRedeemCode.minLevel }
+          : options;
+
       const includeAllAccounts = options?.includeAllAccounts ?? false;
       const includeTargetAccounts = options?.includeTargetAccounts ?? false;
-      const selected = await selectRedeemAccounts(targetAccountIds, options);
+      const selected = await selectRedeemAccounts(targetAccountIds, resolvedOptions);
       const pendingAccounts = selected.accounts;
       runState = new RedeemRunState(pendingAccounts.length, selected.resetTriggered);
 
@@ -147,6 +158,10 @@ export class RedeemService extends EventEmitter {
 
       if (runState.resetTriggered) {
         this.log('warn', '开始兑换前，已将 status=1 的账号重置为 0。');
+      }
+
+      if (resolvedOptions?.minLevel && resolvedOptions.minLevel > 0) {
+        this.log('info', `当前兑换码启用了等级限制，仅处理等级 >= ${resolvedOptions.minLevel} 的账号。`);
       }
 
       this.log('info', `共找到 ${runState.total} 个账号，开始处理...`);
@@ -201,7 +216,7 @@ export class RedeemService extends EventEmitter {
         }
       }
 
-      const remaining = includeAllAccounts || includeTargetAccounts ? 0 : await countRemainingRedeemAccounts(options);
+      const remaining = includeAllAccounts || includeTargetAccounts ? 0 : await countRemainingRedeemAccounts(resolvedOptions);
       const summary = runState.toSummary(remaining);
 
       if (remaining > 0) {
@@ -218,7 +233,7 @@ export class RedeemService extends EventEmitter {
       return summary;
     } catch (error) {
       if (error instanceof RedeemCancelledError) {
-        const remaining = await countRemainingRedeemAccounts(options);
+        const remaining = await countRemainingRedeemAccounts(resolvedOptions);
         const summary = runState.toSummary(remaining);
 
         this.log('warn', '兑换任务已停止。');

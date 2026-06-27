@@ -4,6 +4,9 @@ import path from 'node:path';
 
 interface AppConfig {
   redeemToken?: string;
+  redeemHistory?: {
+    accountMissingBaselineCreatedAt?: number;
+  };
   wechatMp?: {
     token?: string;
     cookie?: string;
@@ -55,6 +58,28 @@ export function setRedeemToken(token: string): void {
 
 export function getRedeemConfig(): { redeemToken: string } {
   return { redeemToken: getRedeemToken() };
+}
+
+export function getAccountMissingBaselineCreatedAt(): number | undefined {
+  const config = readConfig();
+  const value = config.redeemHistory?.accountMissingBaselineCreatedAt;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : undefined;
+}
+
+export function ensureAccountMissingBaselineCreatedAt(defaultValue: number): number {
+  const existing = getAccountMissingBaselineCreatedAt();
+  if (existing) {
+    return existing;
+  }
+
+  const normalized = Number.isFinite(defaultValue) && defaultValue > 0 ? Math.trunc(defaultValue) : Date.now();
+  const config = readConfig();
+  config.redeemHistory = {
+    ...(config.redeemHistory ?? {}),
+    accountMissingBaselineCreatedAt: normalized
+  };
+  writeConfig(config);
+  return normalized;
 }
 
 export interface WechatMpConfig {

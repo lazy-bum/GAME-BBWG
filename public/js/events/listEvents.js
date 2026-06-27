@@ -9,6 +9,8 @@ export function bindListEvents({
   getSelectedAccountIds,
   setSelectedAccountIds,
   setAccountBlacklistModalOpen,
+  getAccountMissingRedeemCodesModal,
+  setAccountMissingRedeemCodesModal,
   getAccountGroupFilter,
   setAccountGroupFilter,
   getListAccountsCache,
@@ -47,6 +49,43 @@ export function bindListEvents({
   document.querySelector('#close-account-blacklist')?.addEventListener('click', () => {
     setAccountBlacklistModalOpen(false);
     document.querySelector('#account-blacklist-modal')?.setAttribute('hidden', '');
+  });
+
+  const accountMissingRedeemModal = document.querySelector('#account-missing-redeem-modal');
+  accountMissingRedeemModal?.addEventListener('click', (event) => {
+    if (event.target !== accountMissingRedeemModal) {
+      return;
+    }
+    setAccountMissingRedeemCodesModal(null);
+    document.querySelector('#account-missing-redeem-modal')?.setAttribute('hidden', '');
+  });
+
+  document.querySelector('#close-account-missing-redeem')?.addEventListener('click', () => {
+    setAccountMissingRedeemCodesModal(null);
+    void renderLocal();
+  });
+
+  document.querySelector('#redeem-account-missing-codes')?.addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    const currentModal = getAccountMissingRedeemCodesModal();
+    const accountId = currentModal?.accountId;
+    if (!(button instanceof HTMLButtonElement) || !accountId) {
+      return;
+    }
+
+    button.disabled = true;
+    try {
+      const result = await api(`/api/accounts/${encodeURIComponent(accountId)}/redeem-missing-codes`, {
+        method: 'POST'
+      });
+      const processedCodes = result.data?.processedCodes ?? 0;
+      window.alert(processedCodes > 0 ? `已开始处理 ${processedCodes} 个兑换码。` : '当前没有可补兑的兑换码。');
+      setAccountMissingRedeemCodesModal(null);
+      await render();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '一键兑换未兑换码失败');
+      button.disabled = false;
+    }
   });
 
   document.querySelector('#apply-search')?.addEventListener('click', () => {
@@ -121,6 +160,7 @@ export function bindListEvents({
     getSelectedAccountIds,
     setSelectedAccountIds,
     setAccountBlacklistModalOpen,
+    setAccountMissingRedeemCodesModal,
     isNamePopupDismissBound,
     markNamePopupDismissBound
   });
@@ -160,6 +200,7 @@ function bindDelegatedListEvents({
   getSelectedAccountIds,
   setSelectedAccountIds,
   setAccountBlacklistModalOpen,
+  setAccountMissingRedeemCodesModal,
   isNamePopupDismissBound,
   markNamePopupDismissBound
 }) {
@@ -202,6 +243,27 @@ function bindDelegatedListEvents({
     if (nameButton) {
       event.stopPropagation();
       showNamePopup(nameButton);
+      return;
+    }
+
+    const missingRedeemButton = event.target?.closest?.('[data-view-account-missing-redeem]');
+    if (missingRedeemButton) {
+      const accountId = missingRedeemButton.dataset.viewAccountMissingRedeem;
+      if (!accountId) {
+        return;
+      }
+
+      missingRedeemButton.disabled = true;
+      try {
+        const missingCodes = await api(`/api/accounts/${encodeURIComponent(accountId)}/missing-redeem-codes`);
+        setAccountMissingRedeemCodesModal({
+          accountId,
+          missingCodes: Array.isArray(missingCodes) ? missingCodes : []
+        });
+        void renderLocal();
+      } finally {
+        missingRedeemButton.disabled = false;
+      }
       return;
     }
 

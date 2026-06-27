@@ -96,6 +96,45 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_published_last_seen ON redeem_codes(published_at DESC, last_seen_at DESC);
   `);
 
+  const redeemCodeColumns = await db.all<{ name: string }[]>('PRAGMA table_info(redeem_codes)');
+  if (!redeemCodeColumns.some((column) => column.name === 'validity_type')) {
+    await db.exec("ALTER TABLE redeem_codes ADD COLUMN validity_type TEXT NOT NULL DEFAULT 'permanent'");
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'valid_from')) {
+    await db.exec('ALTER TABLE redeem_codes ADD COLUMN valid_from INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'valid_until')) {
+    await db.exec('ALTER TABLE redeem_codes ADD COLUMN valid_until INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'min_level')) {
+    await db.exec('ALTER TABLE redeem_codes ADD COLUMN min_level INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'note')) {
+    await db.exec("ALTER TABLE redeem_codes ADD COLUMN note TEXT NOT NULL DEFAULT ''");
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'created_at')) {
+    await db.exec('ALTER TABLE redeem_codes ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'updated_at')) {
+    await db.exec('ALTER TABLE redeem_codes ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0');
+  }
+  await db.exec(`
+    UPDATE redeem_codes
+    SET created_at = CASE
+        WHEN created_at > 0 THEN created_at
+        WHEN first_seen_at > 0 THEN first_seen_at
+        ELSE CAST(strftime('%s','now') AS INTEGER) * 1000
+      END,
+      updated_at = CASE
+        WHEN updated_at > 0 THEN updated_at
+        WHEN last_seen_at > 0 THEN last_seen_at
+        ELSE CAST(strftime('%s','now') AS INTEGER) * 1000
+      END
+    WHERE created_at = 0 OR updated_at = 0;
+    CREATE INDEX IF NOT EXISTS idx_redeem_codes_created_at ON redeem_codes(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_redeem_codes_validity_type ON redeem_codes(validity_type);
+  `);
+
   await db.exec(`
     CREATE TABLE IF NOT EXISTS redeem_code_redemptions (
       code TEXT PRIMARY KEY,
@@ -113,6 +152,24 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
     );
     CREATE INDEX IF NOT EXISTS idx_redeem_code_redemptions_status ON redeem_code_redemptions(status);
     CREATE INDEX IF NOT EXISTS idx_redeem_code_redemptions_updated_at ON redeem_code_redemptions(updated_at DESC);
+  `);
+
+  const redeemCodeRedemptionColumns = await db.all<{ name: string }[]>('PRAGMA table_info(redeem_code_redemptions)');
+  if (!redeemCodeRedemptionColumns.some((column) => column.name === 'failed_account_ids')) {
+    await db.exec("ALTER TABLE redeem_code_redemptions ADD COLUMN failed_account_ids TEXT NOT NULL DEFAULT '[]'");
+  }
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS redeem_account_results (
+      code TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'failed',
+      message TEXT NOT NULL DEFAULT '',
+      attempted_at INTEGER NOT NULL,
+      PRIMARY KEY (code, account_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_redeem_account_results_account_id ON redeem_account_results(account_id, attempted_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_redeem_account_results_code ON redeem_account_results(code, attempted_at DESC);
   `);
 
   await db.exec(`
