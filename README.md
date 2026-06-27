@@ -198,10 +198,6 @@ npm run dev -- --wechat
 
 - `PORT`：服务端口，默认 `3458`
 - `REDEEM_TOKEN`：兑换站点签名 TOKEN，可以为空，自动兑换前会尝试自动获取
-- `ADMIN_USERNAME`：管理员登录账号
-- `ADMIN_PASSWORD`：管理员登录密码
-- `TEMP_USERNAME`：临时用户登录账号
-- `TEMP_PASSWORD`：临时用户登录密码
 - `SESSION_SECRET`：登录会话签名密钥
 - `WECHAT_MP_FAKEID`：微信模式目标公众号 fakeid，默认 `MzE5MTIzOTAzNQ==`
 
