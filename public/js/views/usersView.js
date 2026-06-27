@@ -16,7 +16,10 @@ export function renderUsersPage(shell, state) {
               <tr>
                 <th>用户名</th>
                 <th>角色</th>
+                <th>创建人</th>
+                <th>最近更新人</th>
                 <th>创建时间</th>
+                <th>更新时间</th>
               </tr>
             </thead>
             <tbody>
@@ -26,7 +29,10 @@ export function renderUsersPage(shell, state) {
                     <tr>
                       <td data-label="用户名">${escapeHtml(user.username)}</td>
                       <td data-label="角色">${renderRoleBadge(user.role)}</td>
+                      <td data-label="创建人">${escapeHtml(user.createdBy || user.username)}</td>
+                      <td data-label="最近更新人">${escapeHtml(user.updatedBy || user.username)}</td>
                       <td data-label="创建时间">${escapeHtml(formatDateTime(user.createdAt))}</td>
+                      <td data-label="更新时间">${escapeHtml(formatDateTime(user.updatedAt))}</td>
                     </tr>
                   `
                 )

@@ -38,6 +38,7 @@ export interface RedeemRunOptions {
   initialDelayMs?: number;
   autoRetryFailedOnce?: boolean;
   minLevel?: number;
+  actorUsername?: string;
 }
 
 export interface ApiEnvelope {

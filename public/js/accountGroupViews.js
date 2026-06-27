@@ -1,4 +1,4 @@
-import { escapeAttribute, escapeHtml } from './html.js';
+import { escapeAttribute, escapeHtml, formatDateTime } from './html.js';
 
 export function getAccountGroupName(account) {
   return account.groupName?.trim() || '未分组';
@@ -66,6 +66,11 @@ export function renderAccountGroupRow(group) {
       </td>
       <td data-label="排序">
         <input class="search-input group-number-input" type="number" value="${Number(group.sortOrder) || 0}" data-group-sort="${escapeAttribute(group.groupId)}" />
+      </td>
+      <td data-label="审计">
+        <div>${escapeHtml(group.createdBy || 'system')} 创建</div>
+        <div>${escapeHtml(group.updatedBy || 'system')} 更新</div>
+        <div>${escapeHtml(formatDateTime(group.updatedAt))}</div>
       </td>
       <td class="table-actions" data-label="操作">
         <button class="secondary-button" data-save-group="${escapeAttribute(group.groupId)}">保存</button>

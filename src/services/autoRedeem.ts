@@ -146,7 +146,7 @@ export class AutoRedeemCoordinator {
         }
 
         try {
-          const reserved = await reserveRedeemCodeRedemption(code);
+          const reserved = await reserveRedeemCodeRedemption(code, 'system');
           if (!reserved) {
             continue;
           }
@@ -156,15 +156,15 @@ export class AutoRedeemCoordinator {
             // eslint-disable-next-line no-console
             console.log(`[${formatLogTime()}] 自动兑换开始：${code}`);
             return this.runWithConsoleProgress(`自动兑换 ${code}`, () =>
-              runAllAccountsRedeemWithSingleFailureRetry(this.options.redeemService, code, formatLogTime)
+              runAllAccountsRedeemWithSingleFailureRetry(this.options.redeemService, code, formatLogTime, 'system')
             );
           });
-          await completeRedeemCodeRedemption(code, summary);
+          await completeRedeemCodeRedemption(code, summary, 'system');
           // eslint-disable-next-line no-console
           console.log(`[${formatLogTime()}] 自动兑换结束：${code}`);
         } catch (error) {
           const message = error instanceof Error ? error.message : '未知错误';
-          await failRedeemCodeRedemption(code, message).catch((persistError: unknown) => {
+          await failRedeemCodeRedemption(code, message, 'system').catch((persistError: unknown) => {
             // eslint-disable-next-line no-console
             console.error('failed to persist auto redeem failure', persistError);
           });
@@ -207,7 +207,8 @@ export class AutoRedeemCoordinator {
                 runTargetAccountsRedeemWithSingleFailureRetry(
                   this.options.redeemService,
                   latestCode.code,
-                  accountIds
+                  accountIds,
+                  'system'
                 )
             );
             // eslint-disable-next-line no-console

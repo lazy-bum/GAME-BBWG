@@ -77,6 +77,7 @@ export function renderListPage(shell, state) {
                     <th>游戏区</th>
                     <th>游戏等级</th>
                     ${state.isAdmin ? '<th>分组</th>' : ''}
+                    ${state.isAdmin ? '<th>审计</th>' : ''}
                     ${state.isAdmin ? '<th>操作</th>' : ''}
                   </tr>
                 </thead>

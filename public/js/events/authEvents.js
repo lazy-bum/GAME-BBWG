@@ -1,6 +1,8 @@
 export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError, getAllowRegistration, setAllowRegistration }) {
   const loginButton = document.querySelector('#login-button');
-  loginButton?.addEventListener('click', async () => {
+  const registerButton = document.querySelector('#register-button');
+
+  async function submitAuth(action) {
     const usernameInput = document.querySelector('#login-username');
     const passwordInput = document.querySelector('#login-password');
     const feedback = document.querySelector('#login-feedback');
@@ -12,9 +14,14 @@ export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError, get
       feedback.hidden = true;
     }
 
-    loginButton.disabled = true;
+    if (loginButton) {
+      loginButton.disabled = true;
+    }
+    if (registerButton) {
+      registerButton.disabled = true;
+    }
     try {
-      const endpoint = getAllowRegistration() ? '/api/auth/register' : '/api/auth/login';
+      const endpoint = action === 'register' ? '/api/auth/register' : '/api/auth/login';
       const result = await api(endpoint, {
         method: 'POST',
         body: JSON.stringify({ username, password })
@@ -39,8 +46,20 @@ export function bindLoginEvents({ api, render, onLoginSuccess, setAuthError, get
         feedback.textContent = message;
       }
     } finally {
-      loginButton.disabled = false;
+      if (loginButton) {
+        loginButton.disabled = false;
+      }
+      if (registerButton) {
+        registerButton.disabled = false;
+      }
     }
+  }
+
+  loginButton?.addEventListener('click', () => {
+    void submitAuth('login');
+  });
+  registerButton?.addEventListener('click', () => {
+    void submitAuth('register');
   });
 
   document.querySelector('#login-password')?.addEventListener('keydown', (event) => {

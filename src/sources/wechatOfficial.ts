@@ -321,7 +321,7 @@ async function fetchArticleDetails(aids: string[]): Promise<RedeemCodeInput[]> {
   return redeemCodes;
 }
 
-export async function pollWechatRedeemCodes(): Promise<WechatRedeemCodePollResult> {
+export async function pollWechatRedeemCodes(actorUsername?: string): Promise<WechatRedeemCodePollResult> {
   if (disabledByInvalidSession) {
     throw new WechatSessionExpiredError('微信登录态已失效，请更新 WECHAT_MP_TOKEN/WECHAT_MP_COOKIE 或重启服务扫码登录。');
   }
@@ -329,7 +329,7 @@ export async function pollWechatRedeemCodes(): Promise<WechatRedeemCodePollResul
   const articles = await fetchWechatArticleList();
   const articleResult = await upsertWechatArticles(articles);
   const redeemCodes = await fetchArticleDetails(articles.map((article) => article.aid));
-  const codeResult = await upsertRedeemCodes(redeemCodes);
+  const codeResult = await upsertRedeemCodes(redeemCodes, actorUsername);
 
   return {
     foundArticles: articles.length,

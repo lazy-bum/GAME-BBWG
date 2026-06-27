@@ -40,7 +40,10 @@ export class AccountBackupService {
     };
   }
 
-  async importBackup(input: unknown): Promise<{
+  async importBackup(
+    input: unknown,
+    actorUsername?: string
+  ): Promise<{
     groupsInserted: number;
     groupsUpdated: number;
     groupsSkipped: number;
@@ -53,8 +56,8 @@ export class AccountBackupService {
     const db = (await getDb()) as Database<sqlite3.Database, sqlite3.Statement>;
     await db.exec('BEGIN');
     try {
-      const groupResult = await upsertAccountGroupsFromBackup(input.accountGroups, db);
-      const accountResult = await upsertAccountsFromBackup(input.accounts, db);
+      const groupResult = await upsertAccountGroupsFromBackup(input.accountGroups, db, actorUsername);
+      const accountResult = await upsertAccountsFromBackup(input.accounts, db, actorUsername);
 
       await db.exec('COMMIT');
       return {

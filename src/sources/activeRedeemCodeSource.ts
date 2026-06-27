@@ -31,8 +31,8 @@ export class ActiveRedeemCodeSource {
     private readonly options: ActiveRedeemCodeSourceOptions = {}
   ) {}
 
-  async poll(): Promise<RedeemCodeSourcePollResult> {
-    return this.useWechatSource ? pollWechatRedeemCodes() : pollTapTapRedeemCodes();
+  async poll(actorUsername?: string): Promise<RedeemCodeSourcePollResult> {
+    return this.useWechatSource ? pollWechatRedeemCodes(actorUsername) : pollTapTapRedeemCodes(actorUsername);
   }
 
   async initialize(): Promise<void> {

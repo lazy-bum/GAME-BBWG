@@ -9,6 +9,8 @@ function toAccountGroupRow(row: {
   name: string;
   priority: number;
   sort_order: number;
+  created_by: string;
+  updated_by: string;
   created_at: number;
   updated_at: number;
 }): AccountGroupRow {
@@ -17,6 +19,8 @@ function toAccountGroupRow(row: {
     name: row.name,
     priority: row.priority,
     sortOrder: row.sort_order,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -36,6 +40,8 @@ export async function listAccountGroups(): Promise<AccountGroupRow[]> {
       name: string;
       priority: number;
       sort_order: number;
+      created_by: string;
+      updated_by: string;
       created_at: number;
       updated_at: number;
     }[]
@@ -43,7 +49,12 @@ export async function listAccountGroups(): Promise<AccountGroupRow[]> {
   return rows.map(toAccountGroupRow);
 }
 
-export async function createAccountGroup(input: { name: string; priority?: number; sortOrder?: number }): Promise<AccountGroupRow> {
+export async function createAccountGroup(input: {
+  name: string;
+  priority?: number;
+  sortOrder?: number;
+  actorUsername?: string;
+}): Promise<AccountGroupRow> {
   const name = input.name.trim();
   if (!name) {
     throw new Error('请输入分组名称');
@@ -52,15 +63,18 @@ export async function createAccountGroup(input: { name: string; priority?: numbe
   const db = await getDb();
   const now = Date.now();
   const groupId = randomUUID();
+  const actorUsername = input.actorUsername?.trim() || 'system';
   const priority = Number.isFinite(input.priority) ? Number(input.priority) : 0;
   const sortOrder = Number.isFinite(input.sortOrder) ? Number(input.sortOrder) : await getNextSortOrder();
   await db.run(
-    `INSERT INTO account_groups (group_id, name, priority, sort_order, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO account_groups (group_id, name, priority, sort_order, created_by, updated_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     groupId,
     name,
     priority,
     sortOrder,
+    actorUsername,
+    actorUsername,
     now,
     now
   );
@@ -70,6 +84,8 @@ export async function createAccountGroup(input: { name: string; priority?: numbe
     name,
     priority,
     sortOrder,
+    createdBy: actorUsername,
+    updatedBy: actorUsername,
     createdAt: now,
     updatedAt: now
   };
@@ -77,7 +93,7 @@ export async function createAccountGroup(input: { name: string; priority?: numbe
 
 export async function updateAccountGroup(
   groupId: string,
-  input: { name?: string; priority?: number; sortOrder?: number }
+  input: { name?: string; priority?: number; sortOrder?: number; actorUsername?: string }
 ): Promise<AccountGroupRow | null> {
   const normalizedGroupId = groupId.trim();
   if (!normalizedGroupId) {
@@ -96,13 +112,15 @@ export async function updateAccountGroup(
 
   const nextPriority = Number.isFinite(input.priority) ? Number(input.priority) : current.priority;
   const nextSortOrder = Number.isFinite(input.sortOrder) ? Number(input.sortOrder) : current.sortOrder;
+  const actorUsername = input.actorUsername?.trim() || 'system';
   const now = Date.now();
   const db = await getDb();
   await db.run(
-    'UPDATE account_groups SET name = ?, priority = ?, sort_order = ?, updated_at = ? WHERE group_id = ?',
+    'UPDATE account_groups SET name = ?, priority = ?, sort_order = ?, updated_by = ?, updated_at = ? WHERE group_id = ?',
     nextName,
     nextPriority,
     nextSortOrder,
+    actorUsername,
     now,
     normalizedGroupId
   );
@@ -112,20 +130,28 @@ export async function updateAccountGroup(
     name: nextName,
     priority: nextPriority,
     sortOrder: nextSortOrder,
+    updatedBy: actorUsername,
     updatedAt: now
   };
 }
 
-export async function deleteAccountGroup(groupId: string): Promise<boolean> {
+export async function deleteAccountGroup(groupId: string, actorUsername?: string): Promise<boolean> {
   const normalizedGroupId = groupId.trim();
   if (!normalizedGroupId) {
     return false;
   }
 
   const db = await getDb();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.exec('BEGIN');
   try {
-    await db.run('UPDATE accounts SET group_id = ?, updated_at = ? WHERE group_id = ?', '', Date.now(), normalizedGroupId);
+    await db.run(
+      'UPDATE accounts SET group_id = ?, updated_by = ?, updated_at = ? WHERE group_id = ?',
+      '',
+      normalizedActorUsername,
+      Date.now(),
+      normalizedGroupId
+    );
     const result = await db.run('DELETE FROM account_groups WHERE group_id = ?', normalizedGroupId);
     await db.exec('COMMIT');
     return (result.changes ?? 0) > 0;
@@ -151,7 +177,8 @@ function normalizeBackupSortOrder(value: unknown, fallback: number): number {
 
 export async function upsertAccountGroupsFromBackup(
   groups: AccountBackupGroupRow[],
-  dbArg?: Database<sqlite3.Database, sqlite3.Statement>
+  dbArg?: Database<sqlite3.Database, sqlite3.Statement>,
+  actorUsername?: string
 ): Promise<{
   inserted: number;
   updated: number;
@@ -175,6 +202,8 @@ export async function upsertAccountGroupsFromBackup(
               name,
               priority: Number.isFinite(group.priority) ? Number(group.priority) : 0,
               sortOrder: normalizeBackupSortOrder(group.sortOrder, index + 1),
+              createdBy: typeof group.createdBy === 'string' && group.createdBy.trim() ? group.createdBy.trim() : actorUsername?.trim() || 'system',
+              updatedBy: typeof group.updatedBy === 'string' && group.updatedBy.trim() ? group.updatedBy.trim() : actorUsername?.trim() || 'system',
               createdAt: normalizeBackupTimestamp(group.createdAt, now),
               updatedAt: normalizeBackupTimestamp(group.updatedAt, now)
             }
@@ -205,10 +234,12 @@ export async function upsertAccountGroupsFromBackup(
     for (const group of normalized) {
       if (existingIds.has(group.groupId)) {
         await db.run(
-          'UPDATE account_groups SET name = ?, priority = ?, sort_order = ?, created_at = ?, updated_at = ? WHERE group_id = ?',
+          'UPDATE account_groups SET name = ?, priority = ?, sort_order = ?, created_by = ?, updated_by = ?, created_at = ?, updated_at = ? WHERE group_id = ?',
           group.name,
           group.priority,
           group.sortOrder,
+          group.createdBy,
+          group.updatedBy,
           group.createdAt,
           group.updatedAt,
           group.groupId
@@ -218,12 +249,14 @@ export async function upsertAccountGroupsFromBackup(
       }
 
       await db.run(
-        `INSERT INTO account_groups (group_id, name, priority, sort_order, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO account_groups (group_id, name, priority, sort_order, created_by, updated_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         group.groupId,
         group.name,
         group.priority,
         group.sortOrder,
+        group.createdBy,
+        group.updatedBy,
         group.createdAt,
         group.updatedAt
       );

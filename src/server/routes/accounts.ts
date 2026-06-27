@@ -28,6 +28,8 @@ export function registerAccountRoutes({
 }: ApiRouteContext): void {
   const requireAuth = authService.requireAuth;
   const requireRole = authService.requireRole.bind(authService);
+  const getActorUsername = (req: Parameters<typeof authService.getSessionFromRequest>[0]): string =>
+    authService.getSessionFromRequest(req)?.username ?? 'system';
 
   app.get('/api/accounts/import-events', requireAuth, (req, res) => {
     sseHub.handleImportEvents(req, res);
@@ -36,9 +38,10 @@ export function registerAccountRoutes({
   app.post('/api/accounts/batch', requireAuth, async (req, res) => {
     try {
       const { accountIds } = req.body as { accountIds?: string[] };
+      const actorUsername = getActorUsername(req);
       const result = await accountImportService.importAccounts(Array.isArray(accountIds) ? accountIds : [], (payload) => {
         sseHub.broadcastImportProgress(payload);
-      });
+      }, actorUsername);
 
       autoRedeemCoordinator.enqueueLatestRedeemForNewAccounts(result.insertedAccountIds);
       res.json({
@@ -75,7 +78,7 @@ export function registerAccountRoutes({
 
   app.post('/api/accounts/import-backup', requireRole('admin'), async (req, res) => {
     try {
-      const result = await accountBackupService.importBackup(req.body);
+      const result = await accountBackupService.importBackup(req.body, getActorUsername(req));
       res.json({
         ok: true,
         ...result
@@ -96,7 +99,7 @@ export function registerAccountRoutes({
   app.post('/api/account-groups', requireRole('admin'), async (req, res) => {
     try {
       const { name, priority, sortOrder } = req.body as { name?: string; priority?: number; sortOrder?: number };
-      res.json(await createAccountGroup({ name: name ?? '', priority, sortOrder }));
+      res.json(await createAccountGroup({ name: name ?? '', priority, sortOrder, actorUsername: getActorUsername(req) }));
     } catch (error) {
       sendJsonError(res, error);
     }
@@ -106,7 +109,7 @@ export function registerAccountRoutes({
     try {
       const groupId = Array.isArray(req.params.groupId) ? req.params.groupId[0] : req.params.groupId;
       const { name, priority, sortOrder } = req.body as { name?: string; priority?: number; sortOrder?: number };
-      const updated = await updateAccountGroup(groupId, { name, priority, sortOrder });
+      const updated = await updateAccountGroup(groupId, { name, priority, sortOrder, actorUsername: getActorUsername(req) });
       if (!updated) {
         sendJsonError(res, new Error('分组不存在'), 404);
         return;
@@ -120,7 +123,7 @@ export function registerAccountRoutes({
   app.delete('/api/account-groups/:groupId', requireRole('admin'), async (req, res) => {
     try {
       const groupId = Array.isArray(req.params.groupId) ? req.params.groupId[0] : req.params.groupId;
-      const deleted = await deleteAccountGroup(groupId);
+      const deleted = await deleteAccountGroup(groupId, getActorUsername(req));
       if (!deleted) {
         sendJsonError(res, new Error('分组不存在'), 404);
         return;
@@ -134,7 +137,7 @@ export function registerAccountRoutes({
   app.post('/api/accounts/group', requireRole('admin'), async (req, res) => {
     try {
       const { accountIds, groupId } = req.body as { accountIds?: string[]; groupId?: string };
-      const updated = await assignAccountsToGroup(Array.isArray(accountIds) ? accountIds : [], groupId ?? '');
+      const updated = await assignAccountsToGroup(Array.isArray(accountIds) ? accountIds : [], groupId ?? '', getActorUsername(req));
       res.json({ updated });
     } catch (error) {
       sendJsonError(res, error);
@@ -153,7 +156,7 @@ export function registerAccountRoutes({
   app.post('/api/accounts/:accountId/blacklist', requireRole('admin'), async (req, res) => {
     try {
       const accountId = Array.isArray(req.params.accountId) ? req.params.accountId[0] : req.params.accountId;
-      const updated = await setAccountBlacklist(accountId, true);
+      const updated = await setAccountBlacklist(accountId, true, getActorUsername(req));
       if (!updated) {
         sendJsonError(res, new Error('账号不存在'), 404);
         return;
@@ -167,7 +170,7 @@ export function registerAccountRoutes({
   app.delete('/api/accounts/:accountId/blacklist', requireRole('admin'), async (req, res) => {
     try {
       const accountId = Array.isArray(req.params.accountId) ? req.params.accountId[0] : req.params.accountId;
-      const updated = await setAccountBlacklist(accountId, false);
+      const updated = await setAccountBlacklist(accountId, false, getActorUsername(req));
       if (!updated) {
         sendJsonError(res, new Error('账号不存在'), 404);
         return;
@@ -181,16 +184,16 @@ export function registerAccountRoutes({
   app.delete('/api/accounts/:accountId', requireRole('admin'), async (req, res) => {
     try {
       const accountId = Array.isArray(req.params.accountId) ? req.params.accountId[0] : req.params.accountId;
-      await deleteAccount(accountId);
+      await deleteAccount(accountId, getActorUsername(req));
       res.json({ ok: true });
     } catch (error) {
       sendJsonError(res, error);
     }
   });
 
-  app.delete('/api/accounts', requireRole('admin'), async (_req, res) => {
+  app.delete('/api/accounts', requireRole('admin'), async (req, res) => {
     try {
-      const deleted = await deleteAllAccounts();
+      const deleted = await deleteAllAccounts(getActorUsername(req));
       res.json({ deleted });
     } catch (error) {
       sendJsonError(res, error);
@@ -200,7 +203,7 @@ export function registerAccountRoutes({
   app.post('/api/accounts/reorder', requireRole('admin'), async (req, res) => {
     try {
       const { accountIds } = req.body as { accountIds?: string[] };
-      await reorderAccounts(Array.isArray(accountIds) ? accountIds : []);
+      await reorderAccounts(Array.isArray(accountIds) ? accountIds : [], getActorUsername(req));
       res.json({ ok: true });
     } catch (error) {
       sendJsonError(res, error);
@@ -235,7 +238,7 @@ export function registerAccountRoutes({
         return;
       }
 
-      const result = await redeemService.runMultiCodeRedeem(redeemableCodes, [accountId]);
+      const result = await redeemService.runMultiCodeRedeem(redeemableCodes, [accountId], getActorUsername(req));
       res.json({
         ok: true,
         data: {

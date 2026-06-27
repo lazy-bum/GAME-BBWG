@@ -248,6 +248,8 @@ export async function listBlacklistEntries(): Promise<BlacklistEntry[]> {
     {
       ip_address: string;
       reason: string;
+      created_by: string;
+      updated_by: string;
       created_at: number;
       updated_at: number;
     }[]
@@ -256,6 +258,8 @@ export async function listBlacklistEntries(): Promise<BlacklistEntry[]> {
   return rows.map((row) => ({
     ipAddress: row.ip_address,
     reason: row.reason,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }));
@@ -295,6 +299,8 @@ export async function getBlacklistEntry(ipAddress: string): Promise<BlacklistEnt
   const row = await db.get<{
     ip_address: string;
     reason: string;
+    created_by: string;
+    updated_by: string;
     created_at: number;
     updated_at: number;
   }>('SELECT * FROM visitor_blacklist WHERE ip_address = ?', ipAddress);
@@ -306,20 +312,32 @@ export async function getBlacklistEntry(ipAddress: string): Promise<BlacklistEnt
   return {
     ipAddress: row.ip_address,
     reason: row.reason,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
 }
 
-export async function upsertBlacklistEntry(ipAddress: string, reason: string): Promise<void> {
+export async function upsertBlacklistEntry(ipAddress: string, reason: string, actorUsername?: string): Promise<void> {
   const db = await getDb();
   const now = Date.now();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.run(
-    `INSERT INTO visitor_blacklist (ip_address, reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(ip_address) DO UPDATE SET reason = excluded.reason, updated_at = excluded.updated_at`,
+    `INSERT INTO visitor_blacklist (ip_address, reason, created_by, updated_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(ip_address) DO UPDATE SET
+       reason = excluded.reason,
+       created_by = CASE
+         WHEN TRIM(visitor_blacklist.created_by) = '' THEN excluded.created_by
+         ELSE visitor_blacklist.created_by
+       END,
+       updated_by = excluded.updated_by,
+       updated_at = excluded.updated_at`,
     ipAddress,
     reason,
+    normalizedActorUsername,
+    normalizedActorUsername,
     now,
     now
   );
@@ -328,6 +346,8 @@ export async function upsertBlacklistEntry(ipAddress: string, reason: string): P
     blacklistCache.set(ipAddress, {
       ipAddress,
       reason,
+      createdBy: existing?.createdBy ?? normalizedActorUsername,
+      updatedBy: normalizedActorUsername,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now
     });

@@ -39,7 +39,7 @@ export async function selectRedeemAccounts(
   accounts = filterAccountsByMinLevel(accounts, options?.minLevel);
 
   if (!includeAllAccounts && (!targetAccountIds || targetAccountIds.length === 0) && accounts.length === 0) {
-    await resetAccountsStatus(ACCOUNT_STATUS.redeemed, ACCOUNT_STATUS.pending);
+    await resetAccountsStatus(ACCOUNT_STATUS.redeemed, ACCOUNT_STATUS.pending, options?.actorUsername);
     accounts = filterAccountsByMinLevel(await listAccountsByStatus(ACCOUNT_STATUS.pending), options?.minLevel);
     return { accounts, resetTriggered: true };
   }

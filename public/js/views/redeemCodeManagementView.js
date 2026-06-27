@@ -84,6 +84,7 @@ export function renderRedeemCodeManagementPage(shell, state) {
                 <th>备注</th>
                 <th>来源</th>
                 <th>入库时间</th>
+                <th>审计</th>
                 <th>未兑换账号</th>
                 <th>操作</th>
               </tr>
@@ -105,6 +106,10 @@ export function renderRedeemCodeManagementPage(shell, state) {
                       <td data-label="备注">${escapeHtml(item.note || '-')}</td>
                       <td data-label="来源">${escapeHtml(item.sourceId || 'manual')}</td>
                       <td data-label="入库时间">${escapeHtml(formatDateTime(item.createdAt))}</td>
+                      <td data-label="审计">
+                        <div>${escapeHtml(item.createdBy || 'system')} 创建</div>
+                        <div>${escapeHtml(item.updatedBy || 'system')} 更新</div>
+                      </td>
                       <td data-label="未兑换账号">
                         <button
                           class="secondary-button"

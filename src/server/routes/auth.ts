@@ -1,4 +1,4 @@
-import { countUsers, createInitialAdmin } from '../../core/userRepository.js';
+import { countUsers, createInitialAdmin, createUser } from '../../core/userRepository.js';
 import { sendJsonError } from '../http.js';
 import { hashPassword } from '../userPassword.js';
 import type { ApiRouteContext } from './types.js';
@@ -30,6 +30,10 @@ function validateCredentials(username: string, password: string): string | null 
   return null;
 }
 
+function isDuplicateUsernameError(error: unknown): boolean {
+  return error instanceof Error && /UNIQUE constraint failed: users\.username/i.test(error.message);
+}
+
 export function registerAuthRoutes({ app, authService }: ApiRouteContext): void {
   app.get('/api/auth/status', async (req, res) => {
     try {
@@ -56,13 +60,21 @@ export function registerAuthRoutes({ app, authService }: ApiRouteContext): void 
         return;
       }
 
-      const createdUser = await createInitialAdmin({
-        username,
-        passwordHash: hashPassword(password)
-      });
+      const passwordHash = hashPassword(password);
+      let createdUser = null;
+      if ((await countUsers()) === 0) {
+        createdUser = await createInitialAdmin({
+          username,
+          passwordHash
+        });
+      }
       if (!createdUser) {
-        sendJsonError(res, new Error('系统已经完成初始化，请直接登录。'), 409);
-        return;
+        createdUser = await createUser({
+          username,
+          passwordHash,
+          role: 'user',
+          actorUsername: username
+        });
       }
 
       const token = authService.createSession(createdUser.username, createdUser.role);
@@ -74,6 +86,10 @@ export function registerAuthRoutes({ app, authService }: ApiRouteContext): void 
         role: createdUser.role
       });
     } catch (error) {
+      if (isDuplicateUsernameError(error)) {
+        sendJsonError(res, new Error('用户名已存在。'), 409);
+        return;
+      }
       sendJsonError(res, error);
     }
   });

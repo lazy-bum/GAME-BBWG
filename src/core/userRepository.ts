@@ -5,6 +5,8 @@ interface UserDbRow {
   username: string;
   password_hash: string;
   role: UserRole;
+  created_by: string;
+  updated_by: string;
   created_at: number;
   updated_at: number;
 }
@@ -13,6 +15,8 @@ function toUserRow(row: UserDbRow): UserRow {
   return {
     username: row.username,
     role: row.role,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -34,7 +38,7 @@ export async function countUsers(): Promise<number> {
 export async function listUsers(): Promise<UserRow[]> {
   const db = await getDb();
   const rows = await db.all<UserDbRow[]>(
-    `SELECT username, password_hash, role, created_at, updated_at
+    `SELECT username, password_hash, role, created_by, updated_by, created_at, updated_at
      FROM users
      ORDER BY CASE role WHEN 'admin' THEN 0 ELSE 1 END ASC, created_at ASC, username ASC`
   );
@@ -49,7 +53,7 @@ export async function findUserByUsername(username: string): Promise<UserAuthRow 
 
   const db = await getDb();
   const row = await db.get<UserDbRow>(
-    `SELECT username, password_hash, role, created_at, updated_at
+    `SELECT username, password_hash, role, created_by, updated_by, created_at, updated_at
      FROM users
      WHERE username = ?`,
     normalizedUsername
@@ -57,16 +61,24 @@ export async function findUserByUsername(username: string): Promise<UserAuthRow 
   return row ? toUserAuthRow(row) : null;
 }
 
-export async function createUser(input: { username: string; passwordHash: string; role: UserRole }): Promise<UserRow> {
+export async function createUser(input: {
+  username: string;
+  passwordHash: string;
+  role: UserRole;
+  actorUsername?: string;
+}): Promise<UserRow> {
   const normalizedUsername = input.username.trim();
+  const actorUsername = input.actorUsername?.trim() || normalizedUsername;
   const now = Date.now();
   const db = await getDb();
   await db.run(
-    `INSERT INTO users (username, password_hash, role, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO users (username, password_hash, role, created_by, updated_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     normalizedUsername,
     input.passwordHash,
     input.role,
+    actorUsername,
+    actorUsername,
     now,
     now
   );
@@ -74,6 +86,8 @@ export async function createUser(input: { username: string; passwordHash: string
   return {
     username: normalizedUsername,
     role: input.role,
+    createdBy: actorUsername,
+    updatedBy: actorUsername,
     createdAt: now,
     updatedAt: now
   };
@@ -93,10 +107,12 @@ export async function createInitialAdmin(input: { username: string; passwordHash
     }
 
     await db.run(
-      `INSERT INTO users (username, password_hash, role, created_at, updated_at)
-       VALUES (?, ?, 'admin', ?, ?)`,
+      `INSERT INTO users (username, password_hash, role, created_by, updated_by, created_at, updated_at)
+       VALUES (?, ?, 'admin', ?, ?, ?, ?)`,
       normalizedUsername,
       input.passwordHash,
+      normalizedUsername,
+      normalizedUsername,
       now,
       now
     );
@@ -105,6 +121,8 @@ export async function createInitialAdmin(input: { username: string; passwordHash
     return {
       username: normalizedUsername,
       role: 'admin',
+      createdBy: normalizedUsername,
+      updatedBy: normalizedUsername,
       createdAt: now,
       updatedAt: now
     };

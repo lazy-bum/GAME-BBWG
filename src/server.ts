@@ -69,7 +69,7 @@ registerApiRoutes({
   accountBackupService,
   autoRedeemCoordinator,
   sseHub,
-  pollActiveRedeemCodeSource: () => redeemCodeSource.poll(),
+  pollActiveRedeemCodeSource: (actorUsername) => redeemCodeSource.poll(actorUsername),
   visitorLogRetentionDays: VISITOR_LOG_RETENTION_DAYS
 });
 

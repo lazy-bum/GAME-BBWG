@@ -7,9 +7,10 @@ import { mergeRedeemSummaries } from './redeemSummary.js';
 export async function runAllAccountsRedeemWithSingleFailureRetry(
   redeemService: RedeemService,
   code: string,
-  formatLogTime: () => string
+  formatLogTime: () => string,
+  actorUsername = 'system'
 ): Promise<RedeemSummary> {
-  const firstSummary = await redeemService.runAutoRedeemForAllAccounts(code);
+  const firstSummary = await redeemService.runAutoRedeemForAllAccounts(code, actorUsername);
   if (firstSummary.failureCount === 0) {
     return firstSummary;
   }
@@ -22,7 +23,10 @@ export async function runAllAccountsRedeemWithSingleFailureRetry(
 
   // eslint-disable-next-line no-console
   console.log(`[${formatLogTime()}] 自动兑换失败账号重试将在 ${REDEEM_CODE_DELAY_MS / 1000} 秒后开始：${code}`);
-  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, { initialDelayMs: REDEEM_CODE_DELAY_MS });
+  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, {
+    initialDelayMs: REDEEM_CODE_DELAY_MS,
+    actorUsername
+  });
   // eslint-disable-next-line no-console
   console.log(`[${formatLogTime()}] 自动兑换失败账号重试结束：${code}`);
 
@@ -32,9 +36,10 @@ export async function runAllAccountsRedeemWithSingleFailureRetry(
 export async function runTargetAccountsRedeemWithSingleFailureRetry(
   redeemService: RedeemService,
   code: string,
-  accountIds: string[]
+  accountIds: string[],
+  actorUsername = 'system'
 ): Promise<RedeemSummary> {
-  const firstSummary = await redeemService.runRedeemForAccounts(code, accountIds);
+  const firstSummary = await redeemService.runRedeemForAccounts(code, accountIds, actorUsername);
   if (firstSummary.failureCount === 0) {
     return firstSummary;
   }
@@ -49,7 +54,10 @@ export async function runTargetAccountsRedeemWithSingleFailureRetry(
 
   // eslint-disable-next-line no-console
   console.log(`新增账号补兑最新兑换码失败账号重试将在 ${REDEEM_CODE_DELAY_MS / 1000} 秒后开始：code=${code}，账号数=${failedAccountIds.length}`);
-  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, { initialDelayMs: REDEEM_CODE_DELAY_MS });
+  const retrySummary = await redeemService.runBatchRedeem(code, failedAccountIds, {
+    initialDelayMs: REDEEM_CODE_DELAY_MS,
+    actorUsername
+  });
   // eslint-disable-next-line no-console
   console.log(`新增账号补兑最新兑换码失败账号重试完成：code=${code}`);
 

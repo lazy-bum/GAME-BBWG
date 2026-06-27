@@ -24,6 +24,7 @@ export async function upsertRedeemAccountResult(input: {
   status: RedeemAccountResultStatus;
   message: string;
   attemptedAt?: number;
+  updatedBy?: string;
 }): Promise<void> {
   const code = normalizeCode(input.code);
   const accountId = normalizeAccountId(input.accountId);
@@ -33,22 +34,26 @@ export async function upsertRedeemAccountResult(input: {
 
   const db = await getDb();
   const attemptedAt = input.attemptedAt ?? Date.now();
+  const updatedBy = input.updatedBy?.trim() || 'system';
   await db.run(
     `INSERT INTO redeem_account_results (
       code,
       account_id,
       status,
       message,
+      updated_by,
       attempted_at
-    ) VALUES (?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(code, account_id) DO UPDATE SET
       status = excluded.status,
       message = excluded.message,
+      updated_by = excluded.updated_by,
       attempted_at = excluded.attempted_at`,
     code,
     accountId,
     input.status,
     input.message.trim(),
+    updatedBy,
     attemptedAt
   );
 }

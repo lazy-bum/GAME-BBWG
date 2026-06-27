@@ -135,6 +135,7 @@ export function renderRedeemPage(shell, state) {
               <th>头像</th>
               <th>名字</th>
               <th>分组</th>
+              <th>审计</th>
               <th>兑换状态</th>
             </tr>
           </thead>

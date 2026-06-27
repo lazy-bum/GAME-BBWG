@@ -7,10 +7,25 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       username TEXT PRIMARY KEY COLLATE NOCASE,
       password_hash TEXT NOT NULL DEFAULT '',
       role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_users_role_created_at ON users(role, created_at ASC);
+  `);
+  const userColumns = await db.all<{ name: string }[]>('PRAGMA table_info(users)');
+  if (!userColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE users ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!userColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE users ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE users
+    SET created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE username END,
+        updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE username END
+    WHERE TRIM(created_by) = '' OR TRIM(updated_by) = '';
   `);
 
   await db.exec(`
@@ -24,6 +39,8 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       is_deleted INTEGER NOT NULL DEFAULT 0,
       details TEXT NOT NULL DEFAULT '{}',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
@@ -33,6 +50,18 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
   if (!accountColumns.some((column) => column.name === 'group_id')) {
     await db.exec("ALTER TABLE accounts ADD COLUMN group_id TEXT NOT NULL DEFAULT ''");
   }
+  if (!accountColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE accounts ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!accountColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE accounts ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE accounts
+    SET created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END,
+        updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END END
+    WHERE TRIM(created_by) = '' OR TRIM(updated_by) = '';
+  `);
   await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_group_id ON accounts(group_id)');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_status_active ON accounts(status, is_blacklisted, is_deleted)');
   await db.exec('CREATE INDEX IF NOT EXISTS idx_accounts_active_order ON accounts(is_blacklisted, is_deleted, sort_order, created_at)');
@@ -44,9 +73,24 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       name TEXT NOT NULL DEFAULT '',
       priority INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
+  `);
+  const accountGroupColumns = await db.all<{ name: string }[]>('PRAGMA table_info(account_groups)');
+  if (!accountGroupColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE account_groups ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!accountGroupColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE account_groups ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE account_groups
+    SET created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END,
+        updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END END
+    WHERE TRIM(created_by) = '' OR TRIM(updated_by) = '';
   `);
 
   await db.exec(`
@@ -84,10 +128,25 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
     CREATE TABLE IF NOT EXISTS visitor_blacklist (
       ip_address TEXT PRIMARY KEY,
       reason TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_visitor_blacklist_updated_at ON visitor_blacklist(updated_at DESC);
+  `);
+  const visitorBlacklistColumns = await db.all<{ name: string }[]>('PRAGMA table_info(visitor_blacklist)');
+  if (!visitorBlacklistColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE visitor_blacklist ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!visitorBlacklistColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE visitor_blacklist ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE visitor_blacklist
+    SET created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END,
+        updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END END
+    WHERE TRIM(created_by) = '' OR TRIM(updated_by) = '';
   `);
 
   await db.exec(`
@@ -123,6 +182,12 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
   if (!redeemCodeColumns.some((column) => column.name === 'note')) {
     await db.exec("ALTER TABLE redeem_codes ADD COLUMN note TEXT NOT NULL DEFAULT ''");
   }
+  if (!redeemCodeColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE redeem_codes ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!redeemCodeColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE redeem_codes ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
   if (!redeemCodeColumns.some((column) => column.name === 'created_at')) {
     await db.exec('ALTER TABLE redeem_codes ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0');
   }
@@ -140,8 +205,10 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
         WHEN updated_at > 0 THEN updated_at
         WHEN last_seen_at > 0 THEN last_seen_at
         ELSE CAST(strftime('%s','now') AS INTEGER) * 1000
-      END
-    WHERE created_at = 0 OR updated_at = 0;
+      END,
+      created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END,
+      updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END END
+    WHERE created_at = 0 OR updated_at = 0 OR TRIM(created_by) = '' OR TRIM(updated_by) = '';
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_created_at ON redeem_codes(created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_redeem_codes_validity_type ON redeem_codes(validity_type);
   `);
@@ -159,6 +226,8 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       started_at INTEGER NOT NULL,
       completed_at INTEGER NOT NULL DEFAULT 0,
       last_error TEXT NOT NULL DEFAULT '',
+      created_by TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       updated_at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_redeem_code_redemptions_status ON redeem_code_redemptions(status);
@@ -169,6 +238,18 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
   if (!redeemCodeRedemptionColumns.some((column) => column.name === 'failed_account_ids')) {
     await db.exec("ALTER TABLE redeem_code_redemptions ADD COLUMN failed_account_ids TEXT NOT NULL DEFAULT '[]'");
   }
+  if (!redeemCodeRedemptionColumns.some((column) => column.name === 'created_by')) {
+    await db.exec("ALTER TABLE redeem_code_redemptions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''");
+  }
+  if (!redeemCodeRedemptionColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE redeem_code_redemptions ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE redeem_code_redemptions
+    SET created_by = CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END,
+        updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE CASE WHEN TRIM(created_by) <> '' THEN created_by ELSE 'system' END END
+    WHERE TRIM(created_by) = '' OR TRIM(updated_by) = '';
+  `);
 
   await db.exec(`
     CREATE TABLE IF NOT EXISTS redeem_account_results (
@@ -176,11 +257,21 @@ export async function initSchema(db: Database<sqlite3.Database, sqlite3.Statemen
       account_id TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'failed',
       message TEXT NOT NULL DEFAULT '',
+      updated_by TEXT NOT NULL DEFAULT '',
       attempted_at INTEGER NOT NULL,
       PRIMARY KEY (code, account_id)
     );
     CREATE INDEX IF NOT EXISTS idx_redeem_account_results_account_id ON redeem_account_results(account_id, attempted_at DESC);
     CREATE INDEX IF NOT EXISTS idx_redeem_account_results_code ON redeem_account_results(code, attempted_at DESC);
+  `);
+  const redeemAccountResultColumns = await db.all<{ name: string }[]>('PRAGMA table_info(redeem_account_results)');
+  if (!redeemAccountResultColumns.some((column) => column.name === 'updated_by')) {
+    await db.exec("ALTER TABLE redeem_account_results ADD COLUMN updated_by TEXT NOT NULL DEFAULT ''");
+  }
+  await db.exec(`
+    UPDATE redeem_account_results
+    SET updated_by = CASE WHEN TRIM(updated_by) <> '' THEN updated_by ELSE 'system' END
+    WHERE TRIM(updated_by) = '';
   `);
 
   await db.exec(`

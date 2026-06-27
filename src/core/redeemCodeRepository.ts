@@ -23,6 +23,8 @@ type RedeemCodeSelectRow = {
   valid_until: number;
   min_level: number;
   note: string;
+  created_by: string;
+  updated_by: string;
   created_at: number;
   updated_at: number;
   auto_redeem_status?: string | null;
@@ -113,6 +115,8 @@ function toRedeemCodeRow(row: RedeemCodeSelectRow): RedeemCodeRow {
     validUntil,
     minLevel,
     note: row.note,
+    createdBy: row.created_by,
+    updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     isCurrentlyValid: validity.isCurrentlyValid,
@@ -220,7 +224,8 @@ async function attachFailedAccounts(rows: RedeemCodeRow[]): Promise<RedeemCodeRo
 }
 
 export async function upsertRedeemCodes(
-  codes: RedeemCodeInput[]
+  codes: RedeemCodeInput[],
+  actorUsername?: string
 ): Promise<{ inserted: number; updated: number; insertedCodes: string[] }> {
   const normalized = Array.from(
     new Map(
@@ -233,6 +238,7 @@ export async function upsertRedeemCodes(
   }
 
   const db = await getDb();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.exec('BEGIN');
   try {
     let inserted = 0;
@@ -263,9 +269,11 @@ export async function upsertRedeemCodes(
           valid_until,
           min_level,
           note,
+          created_by,
+          updated_by,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'permanent', 0, 0, 0, '', ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'permanent', 0, 0, 0, '', ?, ?, ?, ?)
         ON CONFLICT(code) DO UPDATE SET
           source_id = excluded.source_id,
           source_url = excluded.source_url,
@@ -274,6 +282,11 @@ export async function upsertRedeemCodes(
           content = excluded.content,
           published_at = excluded.published_at,
           last_seen_at = excluded.last_seen_at,
+          created_by = CASE
+            WHEN TRIM(redeem_codes.created_by) = '' THEN excluded.created_by
+            ELSE redeem_codes.created_by
+          END,
+          updated_by = excluded.updated_by,
           updated_at = excluded.updated_at`,
         item.code,
         item.sourceId,
@@ -284,6 +297,8 @@ export async function upsertRedeemCodes(
         item.publishedAt,
         now,
         now,
+        normalizedActorUsername,
+        normalizedActorUsername,
         now,
         now
       );
@@ -305,7 +320,8 @@ export async function upsertRedeemCodes(
 }
 
 export async function createManagedRedeemCodes(
-  inputs: RedeemCodeManageInput[]
+  inputs: RedeemCodeManageInput[],
+  actorUsername?: string
 ): Promise<{ inserted: number; updated: number; codes: string[] }> {
   const normalized = Array.from(
     new Map(inputs.map(normalizeManagedInput).map((item) => [item.code, item])).values()
@@ -316,6 +332,7 @@ export async function createManagedRedeemCodes(
   }
 
   const db = await getDb();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.exec('BEGIN');
   try {
     let inserted = 0;
@@ -342,9 +359,11 @@ export async function createManagedRedeemCodes(
           valid_until,
           min_level,
           note,
+          created_by,
+          updated_by,
           created_at,
           updated_at
-        ) VALUES (?, 'manual', '', ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, 'manual', '', ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(code) DO UPDATE SET
           validity_type = excluded.validity_type,
           valid_from = excluded.valid_from,
@@ -359,6 +378,11 @@ export async function createManagedRedeemCodes(
             WHEN redeem_codes.source_id = '' THEN 'manual'
             ELSE redeem_codes.source_id
           END,
+          created_by = CASE
+            WHEN TRIM(redeem_codes.created_by) = '' THEN excluded.created_by
+            ELSE redeem_codes.created_by
+          END,
+          updated_by = excluded.updated_by,
           updated_at = excluded.updated_at`,
         item.code,
         managedTitle,
@@ -370,6 +394,8 @@ export async function createManagedRedeemCodes(
         item.validUntil ?? 0,
         item.minLevel ?? 0,
         item.note ?? '',
+        normalizedActorUsername,
+        normalizedActorUsername,
         now,
         now
       );
@@ -442,7 +468,7 @@ export async function deleteRedeemCode(code: string): Promise<boolean> {
   }
 }
 
-export async function ensureRedeemCodeExists(code: string): Promise<void> {
+export async function ensureRedeemCodeExists(code: string, actorUsername?: string): Promise<void> {
   const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return;
@@ -450,6 +476,7 @@ export async function ensureRedeemCodeExists(code: string): Promise<void> {
 
   const db = await getDb();
   const now = Date.now();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.run(
     `INSERT OR IGNORE INTO redeem_codes (
       code,
@@ -466,19 +493,23 @@ export async function ensureRedeemCodeExists(code: string): Promise<void> {
       valid_until,
       min_level,
       note,
+      created_by,
+      updated_by,
       created_at,
       updated_at
-    ) VALUES (?, 'manual', '', '手动录入兑换码', '', '', ?, ?, ?, 'permanent', 0, 0, 0, '', ?, ?)`,
+    ) VALUES (?, 'manual', '', '手动录入兑换码', '', '', ?, ?, ?, 'permanent', 0, 0, 0, '', ?, ?, ?, ?)`,
     normalizedCode,
     now,
     now,
     now,
+    normalizedActorUsername,
+    normalizedActorUsername,
     now,
     now
   );
 }
 
-export async function reserveRedeemCodeRedemption(code: string): Promise<boolean> {
+export async function reserveRedeemCodeRedemption(code: string, actorUsername?: string): Promise<boolean> {
   const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return false;
@@ -486,14 +517,19 @@ export async function reserveRedeemCodeRedemption(code: string): Promise<boolean
 
   const db = await getDb();
   const now = Date.now();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   const result = await db.run(
     `INSERT OR IGNORE INTO redeem_code_redemptions (
       code,
       status,
+      created_by,
+      updated_by,
       started_at,
       updated_at
-    ) VALUES (?, 'running', ?, ?)`,
+    ) VALUES (?, 'running', ?, ?, ?, ?)`,
     normalizedCode,
+    normalizedActorUsername,
+    normalizedActorUsername,
     now,
     now
   );
@@ -503,7 +539,8 @@ export async function reserveRedeemCodeRedemption(code: string): Promise<boolean
 
 export async function completeRedeemCodeRedemption(
   code: string,
-  summary: RedeemCodeRedemptionSummaryInput
+  summary: RedeemCodeRedemptionSummaryInput,
+  actorUsername?: string
 ): Promise<void> {
   const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
@@ -512,6 +549,7 @@ export async function completeRedeemCodeRedemption(
 
   const db = await getDb();
   const now = Date.now();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.run(
     `UPDATE redeem_code_redemptions
      SET status = 'completed',
@@ -524,6 +562,7 @@ export async function completeRedeemCodeRedemption(
          remaining = ?,
          completed_at = ?,
          last_error = '',
+         updated_by = ?,
          updated_at = ?
      WHERE code = ?`,
     summary.total,
@@ -534,12 +573,13 @@ export async function completeRedeemCodeRedemption(
     JSON.stringify(Array.isArray(summary.failedAccountIds) ? summary.failedAccountIds : []),
     summary.remaining,
     now,
+    normalizedActorUsername,
     now,
     normalizedCode
   );
 }
 
-export async function failRedeemCodeRedemption(code: string, error: string): Promise<void> {
+export async function failRedeemCodeRedemption(code: string, error: string, actorUsername?: string): Promise<void> {
   const normalizedCode = normalizeCode(code);
   if (!normalizedCode) {
     return;
@@ -547,15 +587,18 @@ export async function failRedeemCodeRedemption(code: string, error: string): Pro
 
   const db = await getDb();
   const now = Date.now();
+  const normalizedActorUsername = actorUsername?.trim() || 'system';
   await db.run(
     `UPDATE redeem_code_redemptions
      SET status = 'failed',
          completed_at = ?,
          last_error = ?,
+         updated_by = ?,
          updated_at = ?
      WHERE code = ?`,
     now,
     error.trim(),
+    normalizedActorUsername,
     now,
     normalizedCode
   );

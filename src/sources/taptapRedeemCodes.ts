@@ -122,9 +122,9 @@ export async function fetchTapTapRedeemCodes(): Promise<RedeemCodeInput[]> {
   return Array.from(new Map(list.flatMap(toRedeemCodeInputs).map((item) => [item.code, item])).values());
 }
 
-export async function pollTapTapRedeemCodes(): Promise<TapTapRedeemCodePollResult> {
+export async function pollTapTapRedeemCodes(actorUsername?: string): Promise<TapTapRedeemCodePollResult> {
   const codes = await fetchTapTapRedeemCodes();
-  const result = await upsertRedeemCodes(codes);
+  const result = await upsertRedeemCodes(codes, actorUsername);
   return {
     found: codes.length,
     inserted: result.inserted,

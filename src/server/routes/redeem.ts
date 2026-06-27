@@ -15,6 +15,8 @@ export function registerRedeemRoutes({
 }: ApiRouteContext): void {
   const requireAuth = authService.requireAuth;
   const requireRole = authService.requireRole.bind(authService);
+  const getActorUsername = (req: Parameters<typeof authService.getSessionFromRequest>[0]): string =>
+    authService.getSessionFromRequest(req)?.username ?? 'system';
 
   app.get('/api/redeem/events', requireAuth, (req, res) => {
     sseHub.handleRedeemEvents(req, res);
@@ -26,7 +28,11 @@ export function registerRedeemRoutes({
       const result = await redeemService.runBatchRedeem(
         giftCode ?? '',
         Array.isArray(targetAccountIds) ? targetAccountIds : undefined,
-        { autoRetryFailedOnce: true, includeTargetAccounts: Array.isArray(targetAccountIds) && targetAccountIds.length > 0 }
+        {
+          autoRetryFailedOnce: true,
+          includeTargetAccounts: Array.isArray(targetAccountIds) && targetAccountIds.length > 0,
+          actorUsername: getActorUsername(req)
+        }
       );
       res.json({ ok: true, data: result });
     } catch (error) {
@@ -42,7 +48,8 @@ export function registerRedeemRoutes({
       const { giftCodes, targetAccountIds } = req.body as { giftCodes?: string[]; targetAccountIds?: string[] };
       const result = await redeemService.runMultiCodeRedeem(
         Array.isArray(giftCodes) ? giftCodes : [],
-        Array.isArray(targetAccountIds) ? targetAccountIds : undefined
+        Array.isArray(targetAccountIds) ? targetAccountIds : undefined,
+        getActorUsername(req)
       );
       res.json({ ok: true, data: result });
     } catch (error) {
@@ -62,7 +69,8 @@ export function registerRedeemRoutes({
               giftCode: item.giftCode ?? '',
               accountIds: Array.isArray(item.accountIds) ? item.accountIds : []
             }))
-          : []
+          : [],
+        getActorUsername(req)
       );
       res.json({ ok: true, data: result });
     } catch (error) {
@@ -80,9 +88,9 @@ export function registerRedeemRoutes({
     });
   });
 
-  app.post('/api/redeem/force-complete-all', requireRole('admin'), async (_req, res) => {
+  app.post('/api/redeem/force-complete-all', requireRole('admin'), async (req, res) => {
     try {
-      const result = await redeemService.forceCompleteAllRedeem();
+      const result = await redeemService.forceCompleteAllRedeem(getActorUsername(req));
       res.json(result);
     } catch (error) {
       sendJsonError(res, error);
@@ -120,7 +128,7 @@ export function registerRedeemRoutes({
           minLevel: body.minLevel,
           note: body.note
         }
-      ]);
+      ], getActorUsername(req));
       res.json({ ok: true, data: result });
     } catch (error) {
       sendJsonError(res, error);
@@ -146,7 +154,8 @@ export function registerRedeemRoutes({
           validUntil: body.validUntil,
           minLevel: body.minLevel,
           note: body.note
-        }))
+        })),
+        getActorUsername(req)
       );
       res.json({ ok: true, data: result });
     } catch (error) {
@@ -164,9 +173,9 @@ export function registerRedeemRoutes({
     }
   });
 
-  app.post('/api/redeem-codes/sync', requireRole('admin'), async (_req, res) => {
+  app.post('/api/redeem-codes/sync', requireRole('admin'), async (req, res) => {
     try {
-      const result = await pollActiveRedeemCodeSource();
+      const result = await pollActiveRedeemCodeSource(getActorUsername(req));
       res.json({
         ok: true,
         ...result

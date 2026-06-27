@@ -10,6 +10,8 @@ import type { ApiRouteContext } from './types.js';
 
 export function registerVisitorRoutes({ app, authService, visitorLogRetentionDays }: ApiRouteContext): void {
   const requireRole = authService.requireRole.bind(authService);
+  const getActorUsername = (req: Parameters<typeof authService.getSessionFromRequest>[0]): string =>
+    authService.getSessionFromRequest(req)?.username ?? 'system';
 
   app.get('/api/visitor-logs', requireRole('admin'), async (req, res) => {
     try {
@@ -63,7 +65,7 @@ export function registerVisitorRoutes({ app, authService, visitorLogRetentionDay
         return;
       }
 
-      await upsertBlacklistEntry(normalizedIpAddress, normalizedReason);
+      await upsertBlacklistEntry(normalizedIpAddress, normalizedReason, getActorUsername(req));
       res.json({ ok: true });
     } catch (error) {
       sendJsonError(res, error);

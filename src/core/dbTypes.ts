@@ -10,6 +10,8 @@ export type UserRole = 'admin' | 'user';
 export interface UserRow {
   username: string;
   role: UserRole;
+  createdBy: string;
+  updatedBy: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -31,6 +33,8 @@ export interface AccountRow {
   deleted: boolean;
   details: Record<string, unknown>;
   sortOrder: number;
+  createdBy: string;
+  updatedBy: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -57,6 +61,8 @@ export interface AccountGroupRow {
   name: string;
   priority: number;
   sortOrder: number;
+  createdBy: string;
+  updatedBy: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -91,6 +97,8 @@ export interface VisitorLogRow extends VisitorLogInput {
 export interface BlacklistEntry {
   ipAddress: string;
   reason: string;
+  createdBy: string;
+  updatedBy: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -125,6 +133,8 @@ export interface RedeemCodeRow extends RedeemCodeInput {
   validUntil?: number;
   minLevel?: number;
   note: string;
+  createdBy: string;
+  updatedBy: string;
   createdAt: number;
   updatedAt: number;
   isCurrentlyValid: boolean;

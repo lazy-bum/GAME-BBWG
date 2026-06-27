@@ -171,7 +171,8 @@ export class RedeemService extends EventEmitter {
         setActiveController: (controller) => {
           this.activeController = controller;
         },
-        log: (level, message) => this.log(level, message)
+        log: (level, message) => this.log(level, message),
+        actorUsername: resolvedOptions?.actorUsername
       });
 
       for (let index = 0; index < pendingAccounts.length; index += CHUNK_SIZE) {
@@ -271,7 +272,16 @@ export class RedeemService extends EventEmitter {
     await this.sleepWithCancel(REDEEM_CODE_DELAY_MS);
     this.log('info', `兑换码 ${giftCode} 自动重试失败账号开始，账号数：${failedAccountIds.length}`);
 
-    const retrySummary = await this.executeBatchRedeem(giftCode, failedAccountIds, undefined, progressContext);
+    const retrySummary = await this.executeBatchRedeem(
+      giftCode,
+      failedAccountIds,
+      {
+        includeTargetAccounts: true,
+        minLevel: options?.minLevel,
+        actorUsername: options?.actorUsername
+      },
+      progressContext
+    );
     const mergedSummary = mergeRedeemSummaries(firstSummary, retrySummary);
 
     this.log(
@@ -287,7 +297,11 @@ export class RedeemService extends EventEmitter {
     return mergedSummary;
   }
 
-  async runMultiCodeRedeem(giftCodes: string[], targetAccountIds?: string[]): Promise<MultiRedeemSummary> {
+  async runMultiCodeRedeem(
+    giftCodes: string[],
+    targetAccountIds?: string[],
+    actorUsername?: string
+  ): Promise<MultiRedeemSummary> {
     if (this.running) {
       throw new Error('当前已有兑换任务正在执行，请稍后再试。');
     }
@@ -326,7 +340,9 @@ export class RedeemService extends EventEmitter {
         const summary = await this.executeBatchRedeemWithSingleFailureRetry(
           giftCode,
           normalizedTargetAccountIds,
-          normalizedTargetAccountIds && normalizedTargetAccountIds.length > 0 ? { includeTargetAccounts: true } : { includeAllAccounts: true },
+          normalizedTargetAccountIds && normalizedTargetAccountIds.length > 0
+            ? { includeTargetAccounts: true, actorUsername }
+            : { includeAllAccounts: true, actorUsername },
           progressContext
         );
         summaries.push({ giftCode, summary });
@@ -359,7 +375,7 @@ export class RedeemService extends EventEmitter {
     }
   }
 
-  async runCodeFailureRedeem(failures: RedeemCodeFailureRetryInput[]): Promise<MultiRedeemSummary> {
+  async runCodeFailureRedeem(failures: RedeemCodeFailureRetryInput[], actorUsername?: string): Promise<MultiRedeemSummary> {
     if (this.running) {
       throw new Error('当前已有兑换任务正在执行，请稍后再试。');
     }
@@ -399,7 +415,7 @@ export class RedeemService extends EventEmitter {
         const summary = await this.executeBatchRedeemWithSingleFailureRetry(
           failure.giftCode,
           failure.accountIds,
-          { includeTargetAccounts: true },
+          { includeTargetAccounts: true, actorUsername },
           progressContext
         );
         summaries.push({ giftCode: failure.giftCode, summary });
@@ -432,15 +448,15 @@ export class RedeemService extends EventEmitter {
     }
   }
 
-  async forceCompleteAllRedeem(): Promise<{ updated: number }> {
-    return { updated: await forceSetAllAccountsRedeemed() };
+  async forceCompleteAllRedeem(actorUsername?: string): Promise<{ updated: number }> {
+    return { updated: await forceSetAllAccountsRedeemed(actorUsername) };
   }
 
-  async runAutoRedeemForAllAccounts(giftCode: string): Promise<RedeemSummary> {
-    return this.runBatchRedeem(giftCode, undefined, { includeAllAccounts: true });
+  async runAutoRedeemForAllAccounts(giftCode: string, actorUsername = 'system'): Promise<RedeemSummary> {
+    return this.runBatchRedeem(giftCode, undefined, { includeAllAccounts: true, actorUsername });
   }
 
-  async runRedeemForAccounts(giftCode: string, accountIds: string[]): Promise<RedeemSummary> {
-    return this.runBatchRedeem(giftCode, accountIds, { includeTargetAccounts: true });
+  async runRedeemForAccounts(giftCode: string, accountIds: string[], actorUsername = 'system'): Promise<RedeemSummary> {
+    return this.runBatchRedeem(giftCode, accountIds, { includeTargetAccounts: true, actorUsername });
   }
 }

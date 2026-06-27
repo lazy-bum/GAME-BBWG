@@ -14,6 +14,6 @@ export interface ApiRouteContext {
   accountImportService: AccountImportService;
   accountBackupService: AccountBackupService;
   sseHub: SseHub;
-  pollActiveRedeemCodeSource: () => Promise<{ insertedCodes: string[] }>;
+  pollActiveRedeemCodeSource: (actorUsername?: string) => Promise<{ insertedCodes: string[] }>;
   visitorLogRetentionDays: number;
 }

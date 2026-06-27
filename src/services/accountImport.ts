@@ -21,7 +21,8 @@ export interface AccountImportResult {
 export class AccountImportService {
   async importAccounts(
     accountIds: string[],
-    onProgress: (payload: AccountImportProgressPayload) => void
+    onProgress: (payload: AccountImportProgressPayload) => void,
+    actorUsername?: string
   ): Promise<AccountImportResult> {
     const normalizedIds = Array.from(new Set(accountIds.map((item) => item.trim()).filter(Boolean)));
     const existingIds = await getExistingAccountIds(normalizedIds);
@@ -70,7 +71,7 @@ export class AccountImportService {
       }
     }
 
-    const result = await createAccountsBatch(accountsToInsert);
+    const result = await createAccountsBatch(accountsToInsert, actorUsername);
     onProgress({
       type: 'done',
       total: normalizedIds.length,

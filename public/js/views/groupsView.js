@@ -8,12 +8,13 @@ export function renderGroupsPage(shell, { accountGroups }) {
       <div class="table-wrap group-list-wrap">
         <table>
           <thead>
-            <tr>
-              <th>分组名称</th>
-              <th>优先级</th>
-              <th>排序</th>
-              <th>操作</th>
-            </tr>
+              <tr>
+                <th>分组名称</th>
+                <th>优先级</th>
+                <th>排序</th>
+                <th>审计</th>
+                <th>操作</th>
+              </tr>
           </thead>
           <tbody>${accountGroups.map(renderAccountGroupRow).join('')}</tbody>
         </table>

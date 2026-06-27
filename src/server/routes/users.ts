@@ -43,6 +43,7 @@ export function registerUserRoutes({ app, authService }: ApiRouteContext): void 
 
   app.post('/api/users', requireRole('admin'), async (req, res) => {
     try {
+      const actorUsername = authService.getSessionFromRequest(req)?.username ?? 'system';
       const { username, password } = normalizeUserInput(req.body as { username?: string; password?: string });
       const validationMessage = validateUserInput(username, password);
       if (validationMessage) {
@@ -53,7 +54,8 @@ export function registerUserRoutes({ app, authService }: ApiRouteContext): void 
       const createdUser = await createUser({
         username,
         passwordHash: hashPassword(password),
-        role: 'user'
+        role: 'user',
+        actorUsername
       });
 
       res.json({
