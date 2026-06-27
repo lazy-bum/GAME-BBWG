@@ -43,11 +43,15 @@ export function renderListPage(shell, state) {
       </div>
       <div class="page-actions list-page-actions">
         <button class="secondary-button" id="refresh-accounts">刷新</button>
+        ${state.isAdmin ? '<button class="secondary-button" id="import-account-backup">导入备份</button>' : ''}
+        ${state.isAdmin ? '<button class="secondary-button" id="export-account-backup">导出备份</button>' : ''}
         ${state.isAdmin ? `<button class="secondary-button" id="view-account-blacklist">查看黑名单 (${state.blacklistedAccounts.length})</button>` : ''}
         ${state.isAdmin ? '<button class="danger-button" id="delete-all-accounts">一键删除</button>' : ''}
       </div>
     </section>
     <section class="panel table-panel">
+      ${state.isAdmin ? '<input id="account-backup-file" type="file" accept="application/json,.json" hidden />' : ''}
+      ${state.accountBackupFeedback ? `<div class="feedback" data-state="${state.accountBackupFeedback.isError ? 'error' : 'success'}">${escapeHtml(state.accountBackupFeedback.message)}</div>` : ''}
       ${state.isAdmin ? renderAccountGroupTabs(state.accounts, state.accountGroups, state.accountGroupFilter) : ''}
       ${batchGroupToolbar}
       ${

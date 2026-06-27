@@ -11,6 +11,8 @@ export function bindListEvents({
   setAccountBlacklistModalOpen,
   getAccountMissingRedeemCodesModal,
   setAccountMissingRedeemCodesModal,
+  getAccountBackupFeedback,
+  setAccountBackupFeedback,
   getAccountGroupFilter,
   setAccountGroupFilter,
   getListAccountsCache,
@@ -18,6 +20,11 @@ export function bindListEvents({
   isNamePopupDismissBound,
   markNamePopupDismissBound
 }) {
+  document.querySelector('#refresh-accounts')?.addEventListener('click', () => {
+    setAccountBackupFeedback(null);
+    void render();
+  });
+
   const deleteAllButton = document.querySelector('#delete-all-accounts');
   deleteAllButton?.addEventListener('click', async () => {
     if (!window.confirm('确定要删除全部账号吗？此操作不可恢复。')) {
@@ -106,6 +113,100 @@ export function bindListEvents({
     void renderLocal();
   });
 
+  const exportBackupButton = document.querySelector('#export-account-backup');
+  exportBackupButton?.addEventListener('click', async () => {
+    if (!(exportBackupButton instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    exportBackupButton.disabled = true;
+    setAccountBackupFeedback(null);
+    try {
+      const response = await fetch('/api/accounts/export', {
+        credentials: 'same-origin'
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || '导出失败');
+      }
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const exportedAt = new Date(data.exportedAt || Date.now()).toISOString().slice(0, 19).replaceAll(':', '-');
+      link.href = url;
+      link.download = `bbwg-accounts-${exportedAt}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      setAccountBackupFeedback({
+        isError: false,
+        message: `导出完成，共 ${Array.isArray(data.accounts) ? data.accounts.length : 0} 个账号。`
+      });
+      void renderLocal();
+    } catch (error) {
+      setAccountBackupFeedback({
+        isError: true,
+        message: error instanceof Error ? error.message : '导出失败'
+      });
+      void renderLocal();
+    } finally {
+      exportBackupButton.disabled = false;
+    }
+  });
+
+  const importBackupButton = document.querySelector('#import-account-backup');
+  const importBackupInput = document.querySelector('#account-backup-file');
+  importBackupButton?.addEventListener('click', () => {
+    setAccountBackupFeedback(null);
+    importBackupInput?.click();
+  });
+
+  importBackupInput?.addEventListener('change', async () => {
+    if (!(importBackupInput instanceof HTMLInputElement) || !importBackupInput.files?.[0]) {
+      return;
+    }
+
+    const file = importBackupInput.files[0];
+    if (!window.confirm(`确定导入备份文件「${file.name}」吗？已存在账号和分组会按备份内容更新。`)) {
+      importBackupInput.value = '';
+      return;
+    }
+    if (!(importBackupButton instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    importBackupButton.disabled = true;
+    setAccountBackupFeedback(null);
+    try {
+      const content = await file.text();
+      const payload = JSON.parse(content);
+      const result = await api('/api/accounts/import-backup', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      setSelectedAccountIds(new Set());
+      setAccountBackupFeedback({
+        isError: false,
+        message:
+          `导入完成，新增 ${result.accountsInserted} 个账号，更新 ${result.accountsUpdated} 个账号，` +
+          `新增 ${result.groupsInserted} 个分组，更新 ${result.groupsUpdated} 个分组。`
+      });
+      await render();
+    } catch (error) {
+      setAccountBackupFeedback({
+        isError: true,
+        message: error instanceof Error ? error.message : '导入失败'
+      });
+      void renderLocal();
+    } finally {
+      importBackupInput.value = '';
+      importBackupButton.disabled = false;
+    }
+  });
+
   const selectVisibleAccounts = document.querySelector('#select-visible-accounts');
   selectVisibleAccounts?.addEventListener('change', () => {
     const selectedAccountIds = new Set(getSelectedAccountIds());
@@ -161,6 +262,8 @@ export function bindListEvents({
     setSelectedAccountIds,
     setAccountBlacklistModalOpen,
     setAccountMissingRedeemCodesModal,
+    getAccountBackupFeedback,
+    setAccountBackupFeedback,
     isNamePopupDismissBound,
     markNamePopupDismissBound
   });
@@ -201,6 +304,7 @@ function bindDelegatedListEvents({
   setSelectedAccountIds,
   setAccountBlacklistModalOpen,
   setAccountMissingRedeemCodesModal,
+  setAccountBackupFeedback,
   isNamePopupDismissBound,
   markNamePopupDismissBound
 }) {
@@ -235,6 +339,7 @@ function bindDelegatedListEvents({
       }
       setAccountGroupFilter(nextFilter);
       setSelectedAccountIds(new Set());
+      setAccountBackupFeedback(null);
       void renderLocal();
       return;
     }

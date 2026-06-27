@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { getDb } from './core/dbConnection.js';
 import { ActiveRedeemCodeSource } from './sources/activeRedeemCodeSource.js';
 import { AccountImportService } from './services/accountImport.js';
+import { AccountBackupService } from './services/accountBackup.js';
 import { AutoRedeemCoordinator } from './services/autoRedeem.js';
 import { RedeemService } from './services/redeem.js';
 import { AuthService } from './server/auth.js';
@@ -17,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const redeemService = new RedeemService();
 const accountImportService = new AccountImportService();
+const accountBackupService = new AccountBackupService();
 const sseHub = new SseHub();
 const redeemCodeSource = new ActiveRedeemCodeSource(process.argv.includes('--wechat'), {
   forceWechatLogin: process.argv.includes('--force-wechat-login')
@@ -39,7 +41,7 @@ const autoRedeemCoordinator = new AutoRedeemCoordinator({
 });
 
 app.set('trust proxy', true);
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(createVisitorAuditMiddleware(authService));
 app.use(createVisitorBlacklistMiddleware());
 app.use(
@@ -68,6 +70,7 @@ registerApiRoutes({
   authService,
   redeemService,
   accountImportService,
+  accountBackupService,
   autoRedeemCoordinator,
   sseHub,
   pollActiveRedeemCodeSource: () => redeemCodeSource.poll(),

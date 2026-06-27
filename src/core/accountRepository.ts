@@ -1,7 +1,13 @@
 import type { Database } from 'sqlite';
 import sqlite3 from 'sqlite3';
 import { getDb } from './dbConnection.js';
-import { ACCOUNT_STATUS, type AccountStatus, type AccountRow, type NewAccountInput } from './dbTypes.js';
+import {
+  ACCOUNT_STATUS,
+  type AccountBackupAccountRow,
+  type AccountStatus,
+  type AccountRow,
+  type NewAccountInput
+} from './dbTypes.js';
 
 function toAccountRow(row: {
   account_id: string;
@@ -201,6 +207,44 @@ export async function listAccounts(): Promise<AccountRow[]> {
     }[]
   >(`${ACCOUNT_SELECT} WHERE a.is_blacklisted = 0 AND a.is_deleted = 0 ${ACCOUNT_REDEEM_ORDER}`);
   return rows.map(toAccountRow);
+}
+
+export async function listAccountsForBackup(): Promise<AccountBackupAccountRow[]> {
+  const db = await getDb();
+  const rows = await db.all<
+    {
+      account_id: string;
+      name: string;
+      kid: string;
+      group_id: string;
+      group_name: string | null;
+      group_priority: number | null;
+      group_sort_order: number | null;
+      status: number;
+      is_blacklisted: number;
+      is_deleted: number;
+      details: string;
+      sort_order: number;
+      created_at: number;
+      updated_at: number;
+    }[]
+  >(`${ACCOUNT_SELECT} WHERE a.is_deleted = 0 ORDER BY a.sort_order ASC, a.created_at ASC`);
+
+  return rows.map((row) => {
+    const account = toAccountRow(row);
+    return {
+      accountId: account.accountId,
+      name: account.name,
+      kid: account.kid,
+      groupId: account.groupId,
+      status: account.status,
+      blacklisted: account.blacklisted,
+      details: account.details,
+      sortOrder: account.sortOrder,
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt
+    };
+  });
 }
 
 export async function listBlacklistedAccounts(): Promise<AccountRow[]> {
@@ -455,4 +499,136 @@ export async function deleteAllAccounts(): Promise<number> {
     Date.now()
   );
   return result.changes ?? 0;
+}
+
+function normalizeBackupTimestamp(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  return fallback;
+}
+
+function normalizeBackupSortOrder(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
+  return fallback;
+}
+
+function normalizeBackupAccount(input: AccountBackupAccountRow, index: number): AccountBackupAccountRow | null {
+  const accountId = input.accountId?.trim();
+  if (!accountId) {
+    return null;
+  }
+
+  const now = Date.now();
+  return {
+    accountId,
+    name: typeof input.name === 'string' ? input.name.trim() : '',
+    kid: typeof input.kid === 'string' ? input.kid.trim() : '',
+    groupId: typeof input.groupId === 'string' ? input.groupId.trim() : '',
+    status:
+      input.status === ACCOUNT_STATUS.redeemed || input.status === ACCOUNT_STATUS.failed
+        ? input.status
+        : ACCOUNT_STATUS.pending,
+    blacklisted: input.blacklisted === true,
+    details: input.details && typeof input.details === 'object' && !Array.isArray(input.details) ? input.details : {},
+    sortOrder: normalizeBackupSortOrder(input.sortOrder, index + 1),
+    createdAt: normalizeBackupTimestamp(input.createdAt, now),
+    updatedAt: normalizeBackupTimestamp(input.updatedAt, now)
+  };
+}
+
+export async function upsertAccountsFromBackup(
+  accounts: AccountBackupAccountRow[],
+  dbArg?: Database<sqlite3.Database, sqlite3.Statement>
+): Promise<{
+  inserted: number;
+  updated: number;
+  skipped: number;
+}> {
+  const normalized = Array.from(
+    new Map(
+      accounts
+        .map((account, index) => normalizeBackupAccount(account, index))
+        .filter((account): account is AccountBackupAccountRow => Boolean(account))
+        .map((account) => [account.accountId, account])
+    ).values()
+  );
+
+  if (normalized.length === 0) {
+    return { inserted: 0, updated: 0, skipped: 0 };
+  }
+
+  const db = dbArg ?? (await getDb());
+  const ownsTransaction = !dbArg;
+  if (ownsTransaction) {
+    await db.exec('BEGIN');
+  }
+  try {
+    const existingGroupRows = await db.all<{ group_id: string }[]>('SELECT group_id FROM account_groups');
+    const existingGroupIds = new Set(existingGroupRows.map((item) => item.group_id));
+    const existingRows = await db.all<{ account_id: string }[]>(
+      `SELECT account_id FROM accounts WHERE account_id IN (${normalized.map(() => '?').join(',')})`,
+      normalized.map((account) => account.accountId)
+    );
+    const existingIds = new Set(existingRows.map((item) => item.account_id));
+    let inserted = 0;
+    let updated = 0;
+
+    for (const account of normalized) {
+      const details = account.details ?? {};
+      const kid = account.kid || extractAccountKid(details);
+      const groupId = account.groupId && existingGroupIds.has(account.groupId) ? account.groupId : '';
+      if (existingIds.has(account.accountId)) {
+        await db.run(
+          `UPDATE accounts
+           SET name = ?, kid = ?, group_id = ?, status = ?, is_blacklisted = ?, is_deleted = 0, details = ?, sort_order = ?, created_at = ?, updated_at = ?
+           WHERE account_id = ?`,
+          account.name,
+          kid,
+          groupId,
+          account.status,
+          account.blacklisted ? 1 : 0,
+          JSON.stringify(details),
+          account.sortOrder,
+          account.createdAt,
+          account.updatedAt,
+          account.accountId
+        );
+        updated += 1;
+        continue;
+      }
+
+      await db.run(
+        `INSERT INTO accounts (account_id, name, kid, group_id, status, is_blacklisted, is_deleted, details, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+        account.accountId,
+        account.name,
+        kid,
+        groupId,
+        account.status,
+        account.blacklisted ? 1 : 0,
+        JSON.stringify(details),
+        account.sortOrder,
+        account.createdAt,
+        account.updatedAt
+      );
+      inserted += 1;
+    }
+
+    if (ownsTransaction) {
+      await db.exec('COMMIT');
+    }
+    return {
+      inserted,
+      updated,
+      skipped: accounts.length - normalized.length
+    };
+  } catch (error) {
+    if (ownsTransaction) {
+      await db.exec('ROLLBACK');
+    }
+    throw error;
+  }
 }

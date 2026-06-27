@@ -29,6 +29,17 @@ export interface NewAccountInput {
   details: Record<string, unknown>;
 }
 
+export type AccountBackupAccountRow = Omit<AccountRow, 'groupName' | 'groupPriority' | 'groupSortOrder' | 'deleted'>;
+export type AccountBackupGroupRow = AccountGroupRow;
+
+export interface AccountBackupPayload {
+  type: 'bbwg-account-backup';
+  schemaVersion: 1;
+  exportedAt: number;
+  accountGroups: AccountBackupGroupRow[];
+  accounts: AccountBackupAccountRow[];
+}
+
 export interface AccountGroupRow {
   groupId: string;
   name: string;

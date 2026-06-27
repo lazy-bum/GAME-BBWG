@@ -68,6 +68,7 @@ let listAccountsCache = [];
 let blacklistedAccounts = [];
 let accountBlacklistModalOpen = false;
 let accountMissingRedeemCodesModal = null;
+let accountBackupFeedback = null;
 let accountGroups = [];
 let selectedAccountIds = new Set();
 let accountGroupFilter = 'ungrouped';
@@ -292,6 +293,7 @@ function navigate(route) {
     accountBlacklistModalOpen = false;
     selectedAccountIds = new Set();
     accountGroupFilter = 'ungrouped';
+    accountBackupFeedback = null;
   }
   const nextHash = route === 'home' ? '' : `#${route}`;
   if (window.location.hash === nextHash) {
@@ -368,7 +370,8 @@ async function renderListPage(refreshData = true) {
     }),
     accountMissingRedeemCodesModal: renderAccountMissingRedeemCodesModal({
       accountMissingRedeemCodesModal
-    })
+    }),
+    accountBackupFeedback
   });
 }
 
@@ -591,6 +594,7 @@ function bindEvents() {
       blacklistedAccounts = [];
       accountBlacklistModalOpen = false;
       accountMissingRedeemCodesModal = null;
+      accountBackupFeedback = null;
       accountGroups = [];
       selectedAccountIds = new Set();
       accountGroupFilter = 'ungrouped';
@@ -678,6 +682,10 @@ function bindEvents() {
     getAccountMissingRedeemCodesModal: () => accountMissingRedeemCodesModal,
     setAccountMissingRedeemCodesModal: (value) => {
       accountMissingRedeemCodesModal = value;
+    },
+    getAccountBackupFeedback: () => accountBackupFeedback,
+    setAccountBackupFeedback: (value) => {
+      accountBackupFeedback = value;
     },
     getAccountGroupFilter: () => accountGroupFilter,
     setAccountGroupFilter: (value) => {

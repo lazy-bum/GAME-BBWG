@@ -20,6 +20,7 @@ import type { ApiRouteContext } from './types.js';
 export function registerAccountRoutes({
   app,
   authService,
+  accountBackupService,
   accountImportService,
   autoRedeemCoordinator,
   redeemService,
@@ -57,6 +58,30 @@ export function registerAccountRoutes({
       res.json(rows);
     } catch (error) {
       sendJsonError(res, error);
+    }
+  });
+
+  app.get('/api/accounts/export', requireRole('admin'), async (_req, res) => {
+    try {
+      const backup = await accountBackupService.exportBackup();
+      const exportedAt = new Date(backup.exportedAt).toISOString().replaceAll(':', '-');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="bbwg-accounts-${exportedAt}.json"`);
+      res.json(backup);
+    } catch (error) {
+      sendJsonError(res, error);
+    }
+  });
+
+  app.post('/api/accounts/import-backup', requireRole('admin'), async (req, res) => {
+    try {
+      const result = await accountBackupService.importBackup(req.body);
+      res.json({
+        ok: true,
+        ...result
+      });
+    } catch (error) {
+      sendJsonError(res, error, 400);
     }
   });
 

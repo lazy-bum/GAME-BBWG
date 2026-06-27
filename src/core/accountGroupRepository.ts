@@ -1,6 +1,8 @@
+import type { Database } from 'sqlite';
 import { randomUUID } from 'node:crypto';
 import { getDb } from './dbConnection.js';
-import type { AccountGroupRow } from './dbTypes.js';
+import sqlite3 from 'sqlite3';
+import type { AccountBackupGroupRow, AccountGroupRow } from './dbTypes.js';
 
 function toAccountGroupRow(row: {
   group_id: string;
@@ -129,6 +131,117 @@ export async function deleteAccountGroup(groupId: string): Promise<boolean> {
     return (result.changes ?? 0) > 0;
   } catch (error) {
     await db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+function normalizeBackupTimestamp(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  return fallback;
+}
+
+function normalizeBackupSortOrder(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.trunc(value);
+  }
+  return fallback;
+}
+
+export async function upsertAccountGroupsFromBackup(
+  groups: AccountBackupGroupRow[],
+  dbArg?: Database<sqlite3.Database, sqlite3.Statement>
+): Promise<{
+  inserted: number;
+  updated: number;
+  skipped: number;
+}> {
+  const normalized = Array.from(
+    new Map(
+      groups
+        .map((group, index) => {
+          const groupId = group.groupId?.trim();
+          const name = group.name?.trim();
+          if (!groupId || !name) {
+            return null;
+          }
+
+          const now = Date.now();
+          return [
+            groupId,
+            {
+              groupId,
+              name,
+              priority: Number.isFinite(group.priority) ? Number(group.priority) : 0,
+              sortOrder: normalizeBackupSortOrder(group.sortOrder, index + 1),
+              createdAt: normalizeBackupTimestamp(group.createdAt, now),
+              updatedAt: normalizeBackupTimestamp(group.updatedAt, now)
+            }
+          ] as const;
+        })
+        .filter((item): item is readonly [string, AccountBackupGroupRow] => Boolean(item))
+    ).values()
+  );
+
+  if (normalized.length === 0) {
+    return { inserted: 0, updated: 0, skipped: groups.length };
+  }
+
+  const db = dbArg ?? (await getDb());
+  const ownsTransaction = !dbArg;
+  if (ownsTransaction) {
+    await db.exec('BEGIN');
+  }
+  try {
+    const existingRows = await db.all<{ group_id: string }[]>(
+      `SELECT group_id FROM account_groups WHERE group_id IN (${normalized.map(() => '?').join(',')})`,
+      normalized.map((group) => group.groupId)
+    );
+    const existingIds = new Set(existingRows.map((item) => item.group_id));
+    let inserted = 0;
+    let updated = 0;
+
+    for (const group of normalized) {
+      if (existingIds.has(group.groupId)) {
+        await db.run(
+          'UPDATE account_groups SET name = ?, priority = ?, sort_order = ?, created_at = ?, updated_at = ? WHERE group_id = ?',
+          group.name,
+          group.priority,
+          group.sortOrder,
+          group.createdAt,
+          group.updatedAt,
+          group.groupId
+        );
+        updated += 1;
+        continue;
+      }
+
+      await db.run(
+        `INSERT INTO account_groups (group_id, name, priority, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        group.groupId,
+        group.name,
+        group.priority,
+        group.sortOrder,
+        group.createdAt,
+        group.updatedAt
+      );
+      inserted += 1;
+    }
+
+    if (ownsTransaction) {
+      await db.exec('COMMIT');
+    }
+    return {
+      inserted,
+      updated,
+      skipped: groups.length - normalized.length
+    };
+  } catch (error) {
+    if (ownsTransaction) {
+      await db.exec('ROLLBACK');
+    }
     throw error;
   }
 }
