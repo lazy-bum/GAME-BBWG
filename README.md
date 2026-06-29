@@ -145,6 +145,46 @@ npm run build
 npm run start
 ```
 
+生成发布包（不上传源码）：
+
+```bash
+npm run package:release
+```
+
+生成后会得到：
+
+```text
+release/bbwg-release.tar.gz
+```
+
+默认只包含生产运行所需文件：
+
+- `dist/`
+- `public/`
+- `package.json`
+- `package-lock.json`
+- `.env.example`
+- `.well-known/`（如果目录存在）
+
+如果你要把当前运行数据一起迁移，也可以手动执行：
+
+```bash
+node scripts/package-release.mjs --with-data --with-config
+```
+
+这会额外把以下运行时文件打进包里：
+
+- `data/`（sqlite 数据库、二维码图片等）
+- `config.json`（自动保存的兑换 token、微信登录态等）
+
+服务器解压后执行：
+
+```bash
+npm ci --omit=dev
+cp .env.example .env
+node dist/server.js
+```
+
 默认地址：
 
 ```text
